@@ -1,4 +1,4 @@
-# The Secretary Status 4.0
+# The Secretary Status 5.0
 
 The production status site lives at <https://the-secretary-status.github.io/>.
 
