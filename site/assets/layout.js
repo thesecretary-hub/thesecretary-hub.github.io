@@ -28,7 +28,6 @@ export function relativeTime(value) {
 
 function header(active, profile) {
   const links = [
-    ['Main Site', APP_CONFIG.mainSiteUrl, 'main'],
     ['Posts', '/posts/', 'posts'],
     ['Forums', '/forums/', 'forums'],
     ['Incidents', '/incidents/', 'incidents'],

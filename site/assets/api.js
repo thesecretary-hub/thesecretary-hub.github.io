@@ -23,6 +23,11 @@ export async function statusApi(action = 'status', data = {}) {
   }
   if (!response.ok) throw new Error(`Status backend returned HTTP ${response.status}.`);
   const result = await response.json();
-  if (!result.ok) throw new Error(result.error || 'Status backend request failed.');
+  if (!result.ok) {
+    if (/^unauthorized\.?$/i.test(String(result.error || '').trim())) {
+      throw new Error('The deployed Apps Script backend is outdated. Publish the current Code.gs as a new web-app version.');
+    }
+    throw new Error(result.error || 'Status backend request failed.');
+  }
   return result;
 }
