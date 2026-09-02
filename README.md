@@ -8,7 +8,7 @@ This repository uses three intentionally separate services:
 - **Google Apps Script** runs monitoring, incident/post storage, subscriptions, notifications, and Render host switching.
 - **Supabase** provides community authentication, PostgreSQL data, profile media, and username login.
 
-InfinityFree, PHP, MySQL, and `thesecretary-status.gt.tc` are no longer part of production. The root PHP files remain only as migration reference and are not included in the Pages deployment artifact.
+InfinityFree, PHP, MySQL, and `thesecretary-status.gt.tc` are no longer part of production and have been removed from this repository.
 
 ## Repository layout
 
@@ -136,8 +136,5 @@ No Apache `.htaccess` configuration is required. GitHub Pages does not use it.
 - The publishable key may be present in browser source; RLS is the authorization boundary.
 - Apps Script validates the Supabase access token, owner email, and `admin` profile role before any private action.
 - Render and Cloudflare credentials remain only in Apps Script Properties.
-- GitHub Actions publishes only `site/`, so legacy PHP files are never served by GitHub Pages.
-
-## Legacy files
-
-The root PHP/MySQL application, `.htaccess`, `database.sql`, `cache/`, and `uploads/` are retained temporarily as reference. They can be deleted after the 4.0 deployment is verified. Do not configure GitHub Pages to publish the repository root.
+- GitHub Actions publishes only `site/`.
+- Secrets belong in Apps Script Properties or another server-side secret store, never in Git.
