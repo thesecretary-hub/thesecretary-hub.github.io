@@ -1,10 +1,8 @@
 export const APP_CONFIG = Object.freeze({
   siteUrl: 'https://the-secretary-status.github.io',
   mainSiteUrl: 'https://thesecretary.xyz/',
-  appsScriptUrl: 'https://script.google.com/macros/s/AKfycbwXryWaU-Chu_Z_lRfslI7w9Stz043rVs0IoqRD4HAuhx2AWHstHf6CIqWLCpS_AUN3CQ/exec',
+  appsScriptUrl: 'https://script.google.com/macros/s/AKfycbwBlZnqbg7K8emJjApBDJWOJ_fM2_fJ-xztrvwDkOl5EH8soea-atPY48s9p2bu1YhcbQ/exec',
 
-  // Supabase Dashboard -> Project Settings -> API.
-  // The project URL is still required before accounts/community can connect.
   supabaseUrl: 'https://ubxgpkjuzkwlewofxmfy.supabase.co',
   supabasePublishableKey: 'sb_publishable_Nv7jtLPDojg2bKUAuMXlBw_T3MuegRF',
 
