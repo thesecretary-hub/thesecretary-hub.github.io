@@ -10,7 +10,7 @@ declare(strict_types=1);
 const APP_NAME = 'The Secretary Status';
 const ADMIN_EMAIL = 'dikshitaggarwal007@gmail.com';
 const MAIN_SITE_URL = 'https://thesecretary.xyz/';
-const STATUS_SITE_URL = 'https://thesecretary-status.gt.tc/';
+const STATUS_SITE_URL = 'https://the-secretary-status.github.io/';
 
 /*
  * Community database (InfinityFree MySQL).
@@ -24,7 +24,8 @@ const DB_PASSWORD = 'PASTE_INFINITYFREE_DATABASE_PASSWORD';
 const DB_CHARSET = 'utf8mb4';
 
 const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwXryWaU-Chu_Z_lRfslI7w9Stz043rVs0IoqRD4HAuhx2AWHstHf6CIqWLCpS_AUN3CQ/exec';
-const GOOGLE_APPS_SCRIPT_SECRET = '6e61dcbb356f951215018fec3c8e9a8c5fd59ad9b426fcb8f2378669accc778e';
+// Retired in 4.0. GitHub Pages must never contain a private API secret.
+const GOOGLE_APPS_SCRIPT_SECRET = 'RETIRED_ROTATE_THE_APPS_SCRIPT_API_SECRET';
 
 const APP_TIMEZONE = 'Asia/Kolkata';
 const SESSION_NAME = 'secretary_status_session';
