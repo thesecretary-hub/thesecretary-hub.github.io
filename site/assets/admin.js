@@ -4,12 +4,18 @@ import { esc, formatDate, showToast } from './layout.js';
 
 const page=document.body.dataset.admin||'overview';
 const root=document.querySelector('[data-admin-root]');
-const {user,profile}=await currentAccount();
-if(!user){location.href=`/login/?return=${encodeURIComponent(location.pathname)}`;}
-else if(profile?.role!=='admin'){root.innerHTML='<main class="auth-shell"><section class="auth-card"><h1>Owner access only</h1><p>This account is not authorized for infrastructure administration.</p><a class="button primary" href="/">Return home</a></section></main>';}
-else load();
+root.innerHTML='<main class="auth-body"><section class="auth-shell"><div class="auth-card"><h1>Opening control room…</h1><p>Verifying your administrator session.</p></div></section></main>';
 
-const nav=()=>`<header class="admin-header"><div class="container wide"><a class="brand" href="/"><span class="brand-mark"><img src="/assets/images/favicon.png" alt=""></span><span><strong>The Secretary</strong><small>Control room</small></span></a><nav><a href="/admin/">Overview</a><a href="/admin/incidents/">Incidents</a><a href="/admin/maintenance/">Maintenance</a><a href="/admin/posts/">Posts</a><a href="/admin/webhooks/">Webhooks</a><a href="/admin/servers/">Servers</a></nav><button class="button small ghost" data-admin-logout>Log out</button></div></header>`;
+function nav(){return `<header class="admin-header"><div class="container wide"><a class="brand" href="/"><span class="brand-mark"><img src="/assets/images/favicon.png" alt=""></span><span><strong>The Secretary</strong><small>Control room</small></span></a><nav><a href="/admin/">Overview</a><a href="/admin/incidents/">Incidents</a><a href="/admin/maintenance/">Maintenance</a><a href="/admin/posts/">Posts</a><a href="/admin/webhooks/">Webhooks</a><a href="/admin/servers/">Servers</a></nav><button class="button small ghost" data-admin-logout>Log out</button></div></header>`;}
+
+async function bootstrap(){try{
+  const {user,profile}=await currentAccount();
+  if(!user){location.href=`/login/?return=${encodeURIComponent(location.pathname)}`;}
+  else if(profile?.role!=='admin'){root.innerHTML='<main class="auth-body"><section class="auth-shell"><div class="auth-card"><h1>Owner access only</h1><p>This account is not authorized for infrastructure administration.</p><a class="button primary" href="/">Return home</a></div></section></main>';}
+  else await load();
+}catch(error){
+  root.innerHTML=`<main class="auth-body"><section class="auth-shell"><div class="auth-card"><h1>Could not open the control room</h1><p>${esc(error?.message||'The administrator session could not be verified.')}</p><a class="button primary" href="/login/">Log in again</a></div></section></main>`;
+}}
 
 async function load(){
   root.innerHTML=`${nav()}<main class="container wide admin-page"><div class="admin-intro"><h1>Loading control room…</h1></div></main>`;
@@ -43,3 +49,5 @@ function bind(){
   document.querySelectorAll('[data-admin-form]').forEach(form=>form.addEventListener('submit',async event=>{event.preventDefault();const button=form.querySelector('button');button.disabled=true;try{await statusApi(form.dataset.adminForm,Object.fromEntries(new FormData(form)));showToast('Saved.');await load();}catch(error){showToast(error.message,'error');button.disabled=false;}}));
   document.querySelectorAll('[data-action-button]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const data={...button.dataset};delete data.actionButton;await statusApi(button.dataset.actionButton,data);showToast('Action completed.');await load();}catch(error){showToast(error.message,'error');button.disabled=false;}});
 }
+
+bootstrap();
