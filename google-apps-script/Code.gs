@@ -926,13 +926,15 @@ function refreshServerInventory_() {
       const service = serviceResponse.service || serviceResponse;
       const bandwidth = decodeJsonResponse_(responses[index * 3 + 1], [200], 'Render').data;
       const deployResponse = decodeJsonResponse_(responses[index * 3 + 2], [200], 'Render').data;
-      const usedBytes = Math.max(0, sumMetricValues_(bandwidth));
+      const usedBytes = Math.max(0, sumBandwidthBytes_(bandwidth));
       const deploys = Array.isArray(deployResponse) ? deployResponse.map(function (entry) { return entry.deploy || entry; }) : [];
       const pipelineUsed = estimatePipelineMinutes_(deploys, monthStart);
+      const details = service.serviceDetails || {};
+      const serviceUrl = details.url || service.url || '';
       return Object.assign(safe, {
-        url: service.url || '', hostname: hostnameFromUrl_(service.url),
+        url: serviceUrl, hostname: hostnameFromUrl_(serviceUrl),
         suspended: service.suspended === true || String(service.suspended || '').toLowerCase() === 'suspended',
-        renderRegion: service.region || server.region, plan: service.plan || '', branch: service.branch || '',
+        renderRegion: details.region || service.region || server.region, plan: details.plan || service.plan || '', branch: service.branch || '',
         bandwidthUsedBytes: usedBytes,
         bandwidthRemainingBytes: Math.max(0, server.bandwidthLimitGb * 1000000000 - usedBytes),
         bandwidthRemainingPercent: Math.max(0, Math.min(100, (1 - usedBytes / (server.bandwidthLimitGb * 1000000000)) * 100)),
@@ -966,8 +968,11 @@ function discoverActiveServerKey_(inventory) {
   const stored = props.getProperty('HOST_ACTIVE_KEY');
   let dnsTarget = '';
   try { dnsTarget = getCloudflareDnsRecord_(HOST_CONFIG.DOMAINS[0]).content || ''; } catch (error) {}
-  const found = inventory.find(function (server) { return server.hostname && server.hostname.toLowerCase() === String(dnsTarget).toLowerCase(); });
+  const normalizedTarget = String(dnsTarget || '').toLowerCase().replace(/^https?:\/\//,'').replace(/[\/.]+$/,'');
+  const found = inventory.find(function (server) { return server.hostname && server.hostname.toLowerCase().replace(/\.$/,'') === normalizedTarget; });
   if (found) { props.setProperty('HOST_ACTIVE_KEY', found.key); return found.key; }
+  const running = inventory.filter(function (server) { return !server.error && server.suspended === false; });
+  if (running.length === 1) { props.setProperty('HOST_ACTIVE_KEY', running[0].key); return running[0].key; }
   return stored && inventory.some(function (server) { return server.key === stored; }) ? stored : '';
 }
 
@@ -1111,6 +1116,23 @@ function sumMetricValues_(node) {
   if (Object.prototype.hasOwnProperty.call(node, 'value') && Number.isFinite(Number(node.value))) return Number(node.value);
   if (Object.prototype.hasOwnProperty.call(node, 'values')) return sumMetricValues_(node.values);
   return ['data','result','series'].reduce(function (sum, key) { return sum + (Object.prototype.hasOwnProperty.call(node,key) ? sumMetricValues_(node[key]) : 0); }, 0);
+}
+
+function sumBandwidthBytes_(payload) {
+  const series = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.data) ? payload.data : []);
+  if (!series.length) return sumMetricValues_(payload);
+  return series.reduce(function (total, item) {
+    const unit = String((item && item.unit) || 'bytes').toLowerCase().replace(/\s+/g,'');
+    let multiplier = 1;
+    if (unit === 'kb' || unit === 'kilobytes') multiplier = 1000;
+    else if (unit === 'kib') multiplier = 1024;
+    else if (unit === 'mb' || unit === 'megabytes') multiplier = 1000000;
+    else if (unit === 'mib') multiplier = 1048576;
+    else if (unit === 'gb' || unit === 'gigabytes') multiplier = 1000000000;
+    else if (unit === 'gib') multiplier = 1073741824;
+    else if (unit === 'tb' || unit === 'terabytes') multiplier = 1000000000000;
+    return total + sumMetricValues_(item && Object.prototype.hasOwnProperty.call(item,'values') ? item.values : item) * multiplier;
+  }, 0);
 }
 
 function estimatePipelineMinutes_(deploys, monthStart) {
