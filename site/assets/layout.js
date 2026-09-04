@@ -28,7 +28,8 @@ export function relativeTime(value) {
 
 function header(active, profile) {
   const links = [
-    ['Status', '/', 'status'],
+    ['Hub', '/', 'hub'],
+    ['Status', '/status/', 'status'],
     ['Posts', '/posts/', 'posts'],
     ['Forums', '/forums/', 'forums'],
     ['Incidents', '/incidents/', 'incidents'],
@@ -43,7 +44,7 @@ function header(active, profile) {
 }
 
 function footer() {
-  return `<footer class="site-footer"><div class="container footer-grid footer-grid-new"><div class="footer-brand"><a class="brand" href="/"><span class="brand-mark"><img src="/assets/images/favicon.png" alt=""></span><strong>The <em>Secretary</em></strong></a><p>Personal tools, monitored in public.</p><span class="footer-language">Language <b>English⌄</b></span></div><div class="footer-menu"><strong>Product</strong><a href="${APP_CONFIG.mainSiteUrl}">Main site</a><a href="/posts/">System posts</a><a href="/forums/">Forums</a></div><div class="footer-menu"><strong>Resources</strong><a href="${APP_CONFIG.mainSiteUrl}documentation">Documentation</a><a href="${APP_CONFIG.mainSiteUrl}invite">Support</a><a href="/incidents/">Incidents</a></div><div class="footer-menu"><strong>Control</strong><a href="/maintenance/">Maintenance</a><a href="/admin/">Admin</a><a href="/profile/">Account</a></div><div class="footer-menu"><strong>Legal</strong><a href="/">Status</a><a href="${APP_CONFIG.mainSiteUrl}">The Secretary</a></div></div><div class="container footer-bottom"><span>© ${new Date().getFullYear()} The Secretary</span><span>Built for clarity</span></div><div class="footer-wordmark">SECRETARY</div></footer>`;
+  return `<footer class="site-footer"><div class="container footer-grid footer-grid-new"><div class="footer-brand"><a class="brand" href="/"><span class="brand-mark"><img src="/assets/images/favicon.png" alt=""></span><strong>The <em>Secretary</em></strong></a><p>Personal tools, monitored in public.</p><span class="footer-language">Language <b>English⌄</b></span></div><div class="footer-menu"><strong>Product</strong><a href="${APP_CONFIG.mainSiteUrl}">Main site</a><a href="/posts/">System posts</a><a href="/forums/">Forums</a></div><div class="footer-menu"><strong>Resources</strong><a href="${APP_CONFIG.mainSiteUrl}documentation">Documentation</a><a href="${APP_CONFIG.mainSiteUrl}invite">Support</a><a href="/incidents/">Incidents</a></div><div class="footer-menu"><strong>Control</strong><a href="/maintenance/">Maintenance</a><a href="/admin/">Admin</a><a href="/profile/">Account</a></div><div class="footer-menu"><strong>Legal</strong><a href="/status/">Status</a><a href="${APP_CONFIG.mainSiteUrl}">The Secretary</a></div></div><div class="container footer-bottom"><span>© ${new Date().getFullYear()} The Secretary</span><span>Built for clarity</span></div><div class="footer-wordmark">SECRETARY</div></footer>`;
 }
 
 export async function mountLayout(active = '') {

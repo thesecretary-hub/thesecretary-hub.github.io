@@ -1,5 +1,5 @@
 export const APP_CONFIG = Object.freeze({
-  siteUrl: 'https://the-secretary-status.github.io',
+  siteUrl: 'https://thesecretary-hub.github.io',
   mainSiteUrl: 'https://thesecretary.xyz/',
   appsScriptUrl: 'https://script.google.com/macros/s/AKfycbwBlZnqbg7K8emJjApBDJWOJ_fM2_fJ-xztrvwDkOl5EH8soea-atPY48s9p2bu1YhcbQ/exec',
 

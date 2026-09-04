@@ -1,5 +1,5 @@
 const STATUS_CONFIG = {
-  SITE_URL: 'https://the-secretary-status.github.io',
+  SITE_URL: 'https://thesecretary-hub.github.io',
   ADMIN_EMAIL: 'dikshitaggarwal007@gmail.com',
   TIMEZONE: 'Asia/Kolkata',
   CHECK_INTERVAL_MINUTES: 5,

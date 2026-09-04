@@ -1,5 +1,6 @@
 import { statusApi } from './api.js';
 import { esc, formatDate, mountLayout, showToast } from './layout.js';
+import { getPublishedPosts, postDate, postHref } from './post-store.js';
 
 const root = document.querySelector('[data-status-root]');
 const percent = (value) => Number.isFinite(Number(value)) ? `${Number(value).toFixed(2)}%` : '—';
@@ -14,8 +15,7 @@ function recordCards(items, type) {
 function postReader(items = []) {
   if (!items.length) return '<div class="empty-card">Nothing has been published here.</div>';
   const [featured, ...recent] = items;
-  const href = (item) => `/content/?type=post&slug=${encodeURIComponent(item.slug)}`;
-  return `<div class="post-reader-layout"><aside class="recent-post-rail"><div><span class="eyebrow">From the team</span><h3>Recent posts</h3></div>${items.slice(0, 5).map((item, index) => `<a href="${href(item)}" class="recent-post ${index === 0 ? 'current' : ''}"><small>0${index + 1}</small><span><b>${esc(item.title)}</b><em>${formatDate(item.publishedAt || item.startedAt || item.startAt, { dateStyle: 'medium' })}</em></span><i>↗</i></a>`).join('')}</aside><a class="featured-post-read" href="${href(featured)}"><span class="eyebrow">Latest dispatch</span><time>${formatDate(featured.publishedAt || featured.startedAt || featured.startAt, { dateStyle: 'long' })}</time><h3>${esc(featured.title)}</h3><p>${esc(featured.excerpt || featured.description || '')}</p><span class="featured-link">Read full post <b>→</b></span></a></div>`;
+  return `<div class="post-reader-layout"><aside class="recent-post-rail"><div><span class="eyebrow">From the team</span><h3>Recent posts</h3></div>${items.slice(0, 5).map((item, index) => `<a href="${postHref(item)}" class="recent-post ${index === 0 ? 'current' : ''}"><small>0${index + 1}</small><span><b>${esc(item.title)}</b><em>${formatDate(postDate(item), { dateStyle: 'medium' })}</em></span><i>↗</i></a>`).join('')}</aside><a class="featured-post-read" href="${postHref(featured)}"><span class="eyebrow">Latest dispatch</span><time>${formatDate(postDate(featured), { dateStyle: 'long' })}</time><h3>${esc(featured.title)}</h3><p>${esc(featured.excerpt || featured.description || '')}</p><span class="featured-link">Read full post <b>→</b></span></a></div>`;
 }
 
 function render(data) {
@@ -36,7 +36,7 @@ function render(data) {
 
 async function load() {
   await mountLayout('status');
-  try { render(await statusApi('status')); }
+  try { const data = await statusApi('status'); data.posts = await getPublishedPosts(6).catch(() => []); render(data); }
   catch (error) {
     root.innerHTML = `<main class="container page"><section class="not-found-panel"><span class="eyebrow">Monitor connection</span><h1>Live data is temporarily unavailable.</h1><p>${esc(error.message)}</p><button class="button primary" data-retry>Retry</button></section></main>`;
     root.querySelector('[data-retry]').onclick = load;

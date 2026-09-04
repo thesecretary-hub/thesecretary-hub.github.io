@@ -1,12 +1,12 @@
-# The Secretary Status 5.0
+# The Secretary Hub
 
-The production status site lives at <https://the-secretary-status.github.io/>.
+The production Hub lives at <https://thesecretary-hub.github.io/>. The live status experience is preserved at <https://thesecretary-hub.github.io/status/>.
 
 This repository uses three intentionally separate services:
 
 - **GitHub Pages** serves the static website from `site/`.
-- **Google Apps Script** runs monitoring, incident/post storage, subscriptions, notifications, and Render host switching.
-- **Supabase** provides community authentication, PostgreSQL data, profile media, and username login.
+- **Google Apps Script** runs monitoring, incident/maintenance storage, subscriptions, notifications, and Render host switching.
+- **Supabase** provides community authentication, PostgreSQL posts/forums, post and profile media, and username login.
 
 InfinityFree, PHP, MySQL, and `thesecretary-status.gt.tc` are no longer part of production and have been removed from this repository.
 
@@ -25,12 +25,12 @@ supabase/functions/         username-or-email login function
 1. Open the Supabase project.
 2. Copy its **Project URL** from **Connect** or **Settings → API**.
 3. Replace `PASTE_SUPABASE_PROJECT_URL` in `site/assets/config.js`.
-4. Open **SQL Editor**, paste all of `supabase/migrations/0001_community.sql`, and run it once.
+4. Open **SQL Editor** and run `supabase/migrations/0001_community.sql`, `0002_fix_forum_validators.sql`, and `0003_posts.sql` in order. The last migration adds Hub posts and the `post-media` bucket.
 5. In **Authentication → URL Configuration**, set:
 
 ```text
-Site URL: https://the-secretary-status.github.io
-Redirect URL: https://the-secretary-status.github.io/**
+Site URL: https://thesecretary-hub.github.io
+Redirect URL: https://thesecretary-hub.github.io/**
 ```
 
 6. Deploy the username login function with the Supabase CLI:
@@ -102,7 +102,7 @@ RENDER_OHIO_API_KEY
 4. The included workflow uploads only `site/` and deploys it to:
 
 ```text
-https://the-secretary-status.github.io/
+https://thesecretary-hub.github.io/
 ```
 
 No Apache `.htaccess` configuration is required. GitHub Pages does not use it.
@@ -110,7 +110,8 @@ No Apache `.htaccess` configuration is required. GitHub Pages does not use it.
 ## Production routes
 
 ```text
-/
+/                       Hub landing page
+/status/                Live system status
 /posts/
 /incidents/
 /maintenance/
@@ -131,7 +132,8 @@ No Apache `.htaccess` configuration is required. GitHub Pages does not use it.
 ## Security model
 
 - Supabase Auth owns user passwords and sessions.
-- PostgreSQL RLS protects every community table.
+- PostgreSQL RLS protects every community table, including editorial posts.
+- The database automatically caps hero posts at 3 and pinned posts at 6 by removing the oldest selection.
 - Storage policies restrict uploads to a folder named after the authenticated user ID.
 - The publishable key may be present in browser source; RLS is the authorization boundary.
 - Apps Script validates the Supabase access token, owner email, and `admin` profile role before any private action.
