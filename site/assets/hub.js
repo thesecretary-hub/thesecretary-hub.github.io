@@ -37,8 +37,8 @@ function renderDrawer(posts) {
   document.querySelector('[data-drawer-posts]').innerHTML = posts.slice(0, 5).map((post) => `<a class="drawer-card" href="${postHref(post)}"><img src="${esc(image(post, 'poster_url'))}" alt=""><span><small>${esc(prettyDate(post))}</small><strong>${esc(post.title)}</strong></span></a>`).join('');
 }
 
-function renderPinned(posts) {
-  document.querySelector('[data-pinned-posts]').innerHTML = posts.slice(0, 6).map((post, index) => `<a class="pinned-card ${index === 0 ? 'pinned-lead' : ''}" href="${postHref(post)}"><img src="${esc(index === 0 ? image(post, 'full_thumb_url') : image(post, 'poster_url'))}" alt=""><span class="pinned-copy"><small>${esc(prettyDate(post))}</small><strong>${esc(post.title)}</strong><em>${esc(post.excerpt)}</em></span></a>`).join('');
+function renderPostGrid(selector, posts) {
+  document.querySelector(selector).innerHTML = posts.slice(0, 6).map((post, index) => `<a class="pinned-card ${index === 0 ? 'pinned-lead' : ''}" href="${postHref(post)}"><img src="${esc(index === 0 ? image(post, 'full_thumb_url') : image(post, 'poster_url'))}" alt=""><span class="pinned-copy"><small>${esc(prettyDate(post))}</small><strong>${esc(post.title)}</strong><em>${esc(post.excerpt)}</em></span></a>`).join('');
 }
 
 let activeSlide = 0;
@@ -78,9 +78,11 @@ async function init() {
   const recent = posts.length ? posts : fallbackSet(5);
   const heroes = posts.filter((post) => post.is_hero);
   const pinned = posts.filter((post) => post.is_pinned);
+  const unpinned = posts.filter((post) => !post.is_pinned);
   renderDrawer(recent.length >= 5 ? recent : [...recent, ...fallbackSet(5 - recent.length)]);
   renderHero(heroes.length ? heroes : fallbackSet(3));
-  renderPinned(pinned.length ? pinned : fallbackSet(6));
+  renderPostGrid('[data-pinned-posts]', pinned.length ? pinned : fallbackSet(6));
+  renderPostGrid('[data-recent-posts]', unpinned.length ? unpinned : fallbackSet(6));
   document.querySelector('[data-year]').textContent = new Date().getFullYear();
   try {
     const { profile } = await currentAccount();
@@ -110,6 +112,33 @@ async function init() {
     manuallyPaused = false;
     syncShowcaseVideo();
   }, { threshold: .25 }).observe(showcase);
+
+  const story = document.querySelector('[data-scroll-story]');
+  const storyVideo = document.querySelector('[data-scroll-story-video]');
+  const storyCopy = document.querySelector('[data-scroll-story-copy]');
+  const storyProgress = document.querySelector('[data-scroll-story-progress]');
+  let storyDuration = 5;
+  let storyFrame = 0;
+  storyVideo.addEventListener('loadedmetadata', () => { storyDuration = storyVideo.duration || 5; updateStory(); });
+  storyVideo.addEventListener('error', () => story.classList.add('video-error'), true);
+  const updateStory = () => {
+    storyFrame = 0;
+    const rect = story.getBoundingClientRect();
+    const travel = Math.max(1, story.offsetHeight - innerHeight);
+    const progress = Math.min(1, Math.max(0, -rect.top / travel));
+    if (storyVideo.readyState >= 1 && Number.isFinite(storyDuration)) {
+      const targetTime = progress * Math.max(.01, storyDuration - .04);
+      if (Math.abs(storyVideo.currentTime - targetTime) > .035) storyVideo.currentTime = targetTime;
+    }
+    const reveal = Math.min(1, Math.max(0, (progress - .14) / .28));
+    storyCopy.style.opacity = String(reveal);
+    storyCopy.style.transform = `translateY(${(1 - reveal) * 72}px)`;
+    storyProgress.style.height = `${Math.max(3, progress * 100)}%`;
+  };
+  const queueStoryUpdate = () => { if (!storyFrame) storyFrame = requestAnimationFrame(updateStory); };
+  addEventListener('scroll', queueStoryUpdate, { passive: true });
+  addEventListener('resize', queueStoryUpdate, { passive: true });
+  updateStory();
 }
 
 init();
