@@ -47,14 +47,26 @@ let timer;
 function renderHero(posts) {
   const slides = document.querySelector('[data-hero-slides]');
   const dots = document.querySelector('[data-hero-dots]');
-  slides.innerHTML = posts.slice(0, 3).map((post, index) => `<article class="hero-slide ${index === 0 ? 'active' : ''}" aria-hidden="${index !== 0}"><img src="${esc(image(post, 'full_thumb_url'))}" alt=""><div class="hero-vignette"></div><div class="hero-copy"><span>The Secretary / Posts</span><h1>${esc(post.title)}</h1><p>${esc(post.excerpt)}</p><a href="${postHref(post)}">Read post <b>→</b></a></div></article>`).join('');
+  slides.innerHTML = posts.slice(0, 3).map((post, index) => `<article class="hero-slide ${index === 0 ? 'active initial' : ''}" aria-hidden="${index !== 0}"><img src="${esc(image(post, 'full_thumb_url'))}" alt=""><div class="hero-vignette"></div><div class="hero-copy"><span>The Secretary / Posts</span><h1>${esc(post.title)}</h1><a href="${postHref(post)}">Read post <b>→</b></a></div></article>`).join('');
   dots.innerHTML = posts.slice(0, 3).map((_, index) => `<button type="button" class="${index === 0 ? 'active' : ''}" data-slide="${index}" aria-label="Show post ${index + 1}"><i></i></button>`).join('');
   dots.querySelectorAll('button').forEach((button) => button.onclick = () => showSlide(Number(button.dataset.slide), posts.length));
   startTimer(posts.length);
 }
 function showSlide(index, total) {
-  activeSlide = (index + Math.min(total, 3)) % Math.min(total, 3);
-  document.querySelectorAll('.hero-slide').forEach((slide, i) => { slide.classList.toggle('active', i === activeSlide); slide.setAttribute('aria-hidden', String(i !== activeSlide)); });
+  const count = Math.min(total, 3);
+  const nextIndex = (index + count) % count;
+  if (nextIndex === activeSlide) return;
+  const allSlides = [...document.querySelectorAll('.hero-slide')];
+  const previous = allSlides[activeSlide];
+  const next = allSlides[nextIndex];
+  previous.classList.remove('initial');
+  previous.classList.add('leaving');
+  previous.setAttribute('aria-hidden', 'true');
+  next.classList.remove('leaving', 'initial');
+  next.classList.add('active');
+  next.setAttribute('aria-hidden', 'false');
+  window.setTimeout(() => { previous.classList.remove('active', 'leaving'); }, 900);
+  activeSlide = nextIndex;
   document.querySelectorAll('[data-hero-dots] button').forEach((dot, i) => dot.classList.toggle('active', i === activeSlide));
 }
 function startTimer(total) { clearInterval(timer); timer = setInterval(() => { if (!paused) showSlide(activeSlide + 1, total); }, 6500); }
@@ -79,8 +91,25 @@ async function init() {
     }
   } catch {}
   const video = document.querySelector('[data-showcase-video]');
+  const showcase = document.querySelector('[data-showcase]');
+  const videoToggle = document.querySelector('[data-showcase-toggle]');
+  let showcaseVisible = false;
+  let manuallyPaused = false;
+  const syncShowcaseVideo = () => {
+    const shouldPlay = showcaseVisible && !manuallyPaused;
+    if (shouldPlay) video.play().catch(() => {}); else video.pause();
+    videoToggle.classList.toggle('paused', !shouldPlay);
+    videoToggle.setAttribute('aria-pressed', String(!shouldPlay));
+    videoToggle.setAttribute('aria-label', shouldPlay ? 'Pause background video' : 'Play background video');
+  };
   video.addEventListener('canplay', () => document.querySelector('.showcase-media').classList.add('video-ready'));
   video.addEventListener('error', () => video.hidden = true, true);
+  videoToggle.addEventListener('click', () => { manuallyPaused = !video.paused; syncShowcaseVideo(); });
+  new IntersectionObserver(([entry]) => {
+    showcaseVisible = entry.isIntersecting;
+    manuallyPaused = false;
+    syncShowcaseVideo();
+  }, { threshold: .25 }).observe(showcase);
 }
 
 init();

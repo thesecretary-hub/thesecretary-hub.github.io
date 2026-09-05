@@ -134,6 +134,7 @@ No Apache `.htaccess` configuration is required. GitHub Pages does not use it.
 - Supabase Auth owns user passwords and sessions.
 - PostgreSQL RLS protects every community table, including editorial posts.
 - The database automatically caps hero posts at 3 and pinned posts at 6 by removing the oldest selection.
+- Every post uses a 16:9 Full Thumb plus a square 1:1 Thumbnail (2160×2160 recommended).
 - Storage policies restrict uploads to a folder named after the authenticated user ID.
 - The publishable key may be present in browser source; RLS is the authorization boundary.
 - Apps Script validates the Supabase access token, owner email, and `admin` profile role before any private action.
