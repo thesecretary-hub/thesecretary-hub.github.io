@@ -22,7 +22,7 @@ let timer;
 function renderHero(posts) {
   const slides = document.querySelector('[data-hero-slides]');
   const dots = document.querySelector('[data-hero-dots]');
-  slides.innerHTML = posts.slice(0, 3).map((post, index) => `<article class="hero-slide ${index === 0 ? 'active initial' : ''}" aria-hidden="${index !== 0}"><img src="${esc(image(post, 'full_thumb_url'))}" alt=""><div class="hero-vignette"></div><div class="hero-copy"><span>The Secretary / Posts</span><h1>${esc(post.title)}</h1><a href="${postHref(post)}">Read post <b>→</b></a></div></article>`).join('');
+  slides.innerHTML = posts.slice(0, 3).map((post, index) => `<article class="hero-slide ${index === 0 ? 'active initial' : ''}" aria-hidden="${index !== 0}"><img src="${esc(image(post, 'full_thumb_url'))}" alt=""><div class="hero-vignette"></div><div class="hero-copy"><img class="hero-poster-logo" src="${esc(image(post, 'poster_url'))}" alt=""><div class="hero-copy-text"><span>The Secretary / Posts</span><h1>${esc(post.title)}</h1><a href="${postHref(post)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5c3.3-.8 6-.2 8.5 1.8v12c-2.5-2-5.2-2.6-8.5-1.8zm17 0c-3.3-.8-6-.2-8.5 1.8v12c2.5-2 5.2-2.6 8.5-1.8z"/></svg>Read post</a></div></div></article>`).join('');
   dots.innerHTML = posts.slice(0, 3).map((_, index) => `<button type="button" class="${index === 0 ? 'active' : ''}" data-slide="${index}" aria-label="Show post ${index + 1}"><i></i></button>`).join('');
   dots.querySelectorAll('button').forEach((button) => button.onclick = () => showSlide(Number(button.dataset.slide), posts.length));
   startTimer(posts.length);
