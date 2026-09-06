@@ -78,19 +78,6 @@ async function init() {
     manuallyPaused = false;
     syncShowcaseVideo();
   }, { threshold: .25 }).observe(showcase);
-  const showcaseForeground = showcase.querySelector('.showcase-foreground');
-  let showcaseFrame = 0;
-  const updateShowcaseFade = () => {
-    showcaseFrame = 0;
-    const foregroundTop = showcaseForeground.getBoundingClientRect().top;
-    const fade = Math.min(.82, Math.max(0, ((innerHeight * .55 - foregroundTop) / (innerHeight * .75)) * .82));
-    showcase.style.setProperty('--showcase-dim', fade.toFixed(3));
-  };
-  const queueShowcaseFade = () => { if (!showcaseFrame) showcaseFrame = requestAnimationFrame(updateShowcaseFade); };
-  addEventListener('scroll', queueShowcaseFade, { passive: true });
-  addEventListener('resize', queueShowcaseFade, { passive: true });
-  updateShowcaseFade();
-
   const story = document.querySelector('[data-scroll-story]');
   const storyVideo = document.querySelector('[data-scroll-story-video]');
   const storyCopy = document.querySelector('[data-scroll-story-copy]');
