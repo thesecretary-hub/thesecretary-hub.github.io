@@ -1,37 +1,12 @@
-import { currentAccount } from './supabase-client.js';
+import { mountLayout } from './layout.js';
 import { FALLBACK_POST, getPublishedPosts, postDate, postHref } from './post-store.js';
+
+await mountLayout('hub');
 
 const esc = (value = '') => String(value).replace(/[&<>'"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
 const prettyDate = (post) => { const date = new Date(postDate(post)); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(date) : 'Recently'; };
 const fallbackSet = (count) => Array.from({ length: count }, (_, index) => ({ ...FALLBACK_POST, id: `fallback-${index}` }));
 const image = (post, kind) => post?.[kind] || (kind === 'poster_url' ? FALLBACK_POST.poster_url : FALLBACK_POST.full_thumb_url);
-
-const header = document.querySelector('[data-hub-header]');
-const drawer = document.querySelector('[data-posts-drawer]');
-const toggle = document.querySelector('[data-posts-toggle]');
-let drawerOpen = false;
-let lastY = 0;
-
-function setDrawer(open) {
-  drawerOpen = open;
-  header.classList.toggle('drawer-open', open);
-  toggle.setAttribute('aria-expanded', String(open));
-  drawer.setAttribute('aria-hidden', String(!open));
-}
-
-toggle.addEventListener('click', () => setDrawer(!drawerOpen));
-document.querySelector('[data-hub-menu]').addEventListener('click', (event) => {
-  const open = header.classList.toggle('mobile-open');
-  event.currentTarget.setAttribute('aria-expanded', String(open));
-});
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setDrawer(false); });
-window.addEventListener('scroll', () => {
-  const y = Math.max(0, scrollY);
-  header.classList.toggle('scrolled', y > 10);
-  if (!drawerOpen && y > 110 && y > lastY + 5) header.classList.add('hidden');
-  if (y < lastY - 2 || y < 50) header.classList.remove('hidden');
-  lastY = y;
-}, { passive: true });
 
 function renderDrawer(posts) {
   document.querySelector('[data-drawer-posts]').innerHTML = posts.slice(0, 5).map((post) => `<a class="drawer-card" href="${postHref(post)}"><img src="${esc(image(post, 'poster_url'))}" alt=""><span><small>${esc(prettyDate(post))}</small><strong>${esc(post.title)}</strong></span></a>`).join('');
@@ -83,15 +58,6 @@ async function init() {
   renderHero(heroes.length ? heroes : fallbackSet(3));
   renderPostGrid('[data-pinned-posts]', pinned.length ? pinned : fallbackSet(6));
   renderPostGrid('[data-recent-posts]', unpinned.length ? unpinned : fallbackSet(6));
-  document.querySelector('[data-year]').textContent = new Date().getFullYear();
-  try {
-    const { profile } = await currentAccount();
-    if (profile) {
-      const link = document.querySelector('[data-account-link]');
-      link.href = '/profile/';
-      link.title = `@${profile.username}`;
-    }
-  } catch {}
   const video = document.querySelector('[data-showcase-video]');
   const showcase = document.querySelector('[data-showcase]');
   const videoToggle = document.querySelector('[data-showcase-toggle]');
