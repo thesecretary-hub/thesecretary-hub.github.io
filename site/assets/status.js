@@ -1,57 +1,109 @@
 import { statusApi } from './api.js';
-import { esc, formatDate, mountLayout, showToast } from './layout.js';
-import { getPublishedPosts, postDate, postHref } from './post-store.js';
+import { esc, formatDate, mountLayout } from './layout.js';
 
 const root = document.querySelector('[data-status-root]');
-const percent = (value) => Number.isFinite(Number(value)) ? `${Number(value).toFixed(2)}%` : '—';
-const statusClass = (status) => status === 'operational' ? 'good' : status === 'maintenance' ? 'warn' : status === 'unknown' ? 'neutral' : 'bad';
-const statusLabel = (status) => status === 'operational' ? 'Operational' : status === 'maintenance' ? 'Maintenance' : status === 'unknown' ? 'Awaiting data' : 'Disruption';
+document.body.classList.add('status-public-mode');
 
-function recordCards(items, type) {
-  if (!items?.length) return '<div class="empty-card">Nothing has been published here.</div>';
-  return items.map((item) => `<a class="post-card" href="/content/?type=${type}&slug=${encodeURIComponent(item.slug)}"><div><small>${formatDate(item.publishedAt || item.startedAt || item.startAt, {dateStyle:'medium'})}</small><h3>${esc(item.title)}</h3><p>${esc(item.excerpt || item.description || '')}</p><span>Open update →</span></div></a>`).join('');
+const stateClass = (state) => state === 'operational' ? 'operational' : state === 'maintenance' || state === 'degraded' ? 'degraded' : state === 'unknown' ? 'unknown' : 'outage';
+const stateLabel = (state) => state === 'operational' ? 'Operational' : state === 'maintenance' || state === 'degraded' ? 'Degraded' : state === 'unknown' ? 'Awaiting data' : 'Disruption';
+const dayKey = (date) => date.toISOString().slice(0, 10);
+const defaultServers = [
+  ['virginia','The-Secretary Virginia US','Virginia US'],
+  ['singapore_n1','The-Secretary Singapore N-1','Singapore N-1'],
+  ['singapore_n2','The-Secretary Singapore N-2','Singapore N-2'],
+  ['frankfurt','The-Secretary Frankfurt EU','Frankfurt EU'],
+  ['ohio','The-Secretary Ohio US','Ohio US'],
+].map(([key,name,region]) => ({key,name,region,status:'operational',label:'Operational'}));
+
+function serviceHistory(service, monitor) {
+  const history = new Map((monitor.history || []).map((day) => [day.date, day]));
+  const today = new Date();
+  return Array.from({length: 90}, (_, index) => {
+    const date = new Date(today);
+    date.setUTCDate(today.getUTCDate() - (89 - index));
+    const item = history.get(dayKey(date));
+    let state = 'unknown';
+    if (service.kind === 'server') state = 'operational';
+    else if (item) {
+      const uptime = service.kind === 'discord' ? item.discordUptime : item.uptime;
+      state = uptime === null || uptime === undefined ? 'unknown' : uptime >= 99.9 ? 'operational' : uptime >= 90 ? 'degraded' : 'outage';
+    }
+    if (index === 89 && service.state !== 'operational') state = service.state;
+    return `<i class="${stateClass(state)}" title="${esc(dayKey(date))}: ${stateLabel(state)}"></i>`;
+  }).join('');
 }
 
-function postReader(items = []) {
-  if (!items.length) return '<div class="empty-card">Nothing has been published here.</div>';
-  const [featured, ...recent] = items;
-  return `<div class="post-reader-layout"><aside class="recent-post-rail"><div><span class="eyebrow">From the team</span><h3>Recent posts</h3></div>${items.slice(0, 5).map((item, index) => `<a href="${postHref(item)}" class="recent-post ${index === 0 ? 'current' : ''}"><small>0${index + 1}</small><span><b>${esc(item.title)}</b><em>${formatDate(postDate(item), { dateStyle: 'medium' })}</em></span><i>↗</i></a>`).join('')}</aside><a class="featured-post-read" href="${postHref(featured)}"><span class="eyebrow">Latest dispatch</span><time>${formatDate(postDate(featured), { dateStyle: 'long' })}</time><h3>${esc(featured.title)}</h3><p>${esc(featured.excerpt || featured.description || '')}</p><span class="featured-link">Read full post <b>→</b></span></a></div>`;
+function serviceRow(service, monitor) {
+  const detail = service.offlineUntil ? ` until ${formatDate(service.offlineUntil, {dateStyle:'medium',timeStyle:'short'})}` : '';
+  return `<article class="status-service"><div class="status-service-head"><h2>${esc(service.name)}</h2><span class="${stateClass(service.state)}">${esc(service.label || stateLabel(service.state))}${esc(detail)}</span></div><div class="status-history" aria-label="90-day status history">${serviceHistory(service, monitor)}</div><div class="status-history-foot"><span>90 days ago</span><b></b><span>${service.kind === 'server' ? '100.0% uptime' : service.uptime === null || service.uptime === undefined ? 'Collecting uptime' : `${Number(service.uptime).toFixed(2)}% uptime`}</span><b></b><span>Today</span></div></article>`;
+}
+
+function incidentDays(incidents = [], maintenance = []) {
+  const records = [...incidents.map((item) => ({...item, recordType:'incident', recordAt:item.startedAt || item.updatedAt})), ...maintenance.map((item) => ({...item, recordType:'maintenance', recordAt:item.startAt || item.updatedAt}))];
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  return Array.from({length:15}, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - index);
+    const daily = records.filter((item) => dayKey(new Date(item.recordAt)) === dayKey(date));
+    const body = daily.length ? daily.map((item) => {
+      if (item.recordType === 'maintenance') return `<div class="status-record maintenance"><h4>${esc(item.title)}</h4><p><strong>${esc(item.status || 'Scheduled')}</strong> - ${esc(item.description || item.excerpt || '')}</p><time>${formatDate(item.startAt, {dateStyle:'medium',timeStyle:'short'})}</time></div>`;
+      const updates = [...(item.updates || [])].reverse();
+      return `<div class="status-record incident"><h4>${esc(item.title)}</h4>${updates.map((update) => `<p><strong>${esc(update.status)}</strong> - ${esc(update.message)}</p><time>${formatDate(update.createdAt, {dateStyle:'medium',timeStyle:'short'})}</time>`).join('')}</div>`;
+    }).join('') : `<p class="no-incidents">${index === 0 ? 'No incidents reported today.' : 'No incidents reported.'}</p>`;
+    return `<section class="incident-day"><h3>${formatDate(date, {dateStyle:'medium'})}</h3>${body}</section>`;
+  }).join('');
+}
+
+function chartMarkup() {
+  return `<section class="metrics-section"><header><span>System metrics</span><nav aria-label="Response period"><button class="active" data-chart-range="day">Day</button><button data-chart-range="week">Week</button><button data-chart-range="month">Month</button></nav></header><div class="response-chart"><div class="response-chart-title"><h2>Website Response Time</h2><strong data-chart-latest>—</strong></div><svg data-response-chart viewBox="0 0 820 190" role="img" aria-label="Website response time graph"></svg></div></section>`;
+}
+
+function drawChart(data, range = 'day') {
+  const svg = root.querySelector('[data-response-chart]');
+  const storedSeries = data.monitor?.response?.series;
+  const series = (Array.isArray(storedSeries) ? storedSeries : storedSeries?.[range]) || [];
+  const latest = series[series.length - 1];
+  root.querySelector('[data-chart-latest]').textContent = latest ? `${Math.round(latest.responseMs)} ms` : 'No data';
+  if (!series.length) { svg.innerHTML = '<text x="410" y="100" text-anchor="middle">Response samples will appear after scheduled checks run.</text>'; return; }
+  const values = series.map((item) => Number(item.responseMs));
+  const low = Math.max(0, Math.floor(Math.min(...values) / 50) * 50 - 50);
+  const high = Math.max(low + 100, Math.ceil(Math.max(...values) / 50) * 50 + 50);
+  const x = (index) => 20 + index / Math.max(1, series.length - 1) * 730;
+  const y = (value) => 155 - (value - low) / (high - low) * 120;
+  const path = series.map((item, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(Number(item.responseMs)).toFixed(1)}`).join(' ');
+  const lines = [0,.33,.66,1].map((part) => { const py=35+part*120; const label=Math.round(high-part*(high-low)); return `<line x1="20" y1="${py}" x2="750" y2="${py}"/><text x="765" y="${py+4}">${label}</text>`; }).join('');
+  const label = (item) => new Intl.DateTimeFormat(undefined, range === 'day' ? {hour:'2-digit',minute:'2-digit'} : {month:'short',day:'numeric'}).format(new Date(item.checkedAt));
+  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" d="${path}"/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
 }
 
 function render(data) {
   const monitor = data.monitor || {};
-  const summary = data.summary || {};
-  const status = summary.status || monitor.status || 'unknown';
-  const response = monitor.response || {};
-  root.innerHTML = `<main class="container page status-page" data-status-content>
-    <section class="status-hero status-cinema ${statusClass(status)}"><div class="hero-copy"><div class="hero-overline"><span class="eyebrow">The Secretary / System control</span><span class="hero-live"><i></i> Live telemetry</span></div><span class="status-pill ${statusClass(status)}"><span class="status-dot"></span>${statusLabel(status)}</span><h1>${esc(summary.headline || 'All systems are ready.')}</h1><p>${esc(summary.message || 'Real-time availability for every Secretary service, measured independently.')}</p><small>Last checked ${formatDate(monitor.lastCheckAt)}</small><form class="hero-subscribe" data-subscribe-form><label for="hero-email">Status notifications</label><div><input id="hero-email" type="email" name="email" required placeholder="you@example.com"><button class="button primary" type="submit">Subscribe</button></div></form></div><div class="hero-orbit" aria-hidden="true"><span class="orbit-ring orbit-ring-one"></span><span class="orbit-ring orbit-ring-two"></span><strong>${status === 'operational' ? 'UP' : '!'}</strong><b>SYS<br>LIVE</b></div><div class="hero-index" aria-hidden="true">01</div></section>
-    <section class="admin-metrics admin-metrics-4 public-metrics reveal"><article><span>24-hour uptime</span><strong>${percent(monitor.uptime?.['24h'])}</strong><small>Completed checks</small></article><article><span>30-day uptime</span><strong>${percent(monitor.uptime?.['30'])}</strong><small>Measured availability</small></article><article><span>Response</span><strong>${Number.isFinite(Number(monitor.responseMs)) ? `${Math.round(monitor.responseMs)} ms` : '—'}</strong><small>Latest HTTP probe</small></article><article><span>Discord API</span><strong>${data.discordApi?.rateLimited ? 'Rate limited' : esc(data.discordApi?.state || 'Unknown')}</strong><small>Authenticated bot probe</small></article></section>
-    <section class="panel telemetry-panel reveal"><div class="panel-heading"><div><span class="eyebrow">Response history</span><h2>Last ${Number(response.periodHours || 48)} hours</h2></div><span>${Number(response.samples || 0)} samples</span></div><div class="response-summary"><div><small>Average</small><strong>${Number.isFinite(Number(response.averageMs)) ? `${Math.round(response.averageMs)} ms` : '—'}</strong></div><div><small>Minimum</small><strong>${Number.isFinite(Number(response.minimumMs)) ? `${Math.round(response.minimumMs)} ms` : '—'}</strong></div><div><small>Maximum</small><strong>${Number.isFinite(Number(response.maximumMs)) ? `${Math.round(response.maximumMs)} ms` : '—'}</strong></div></div></section>
-    <section class="status-section reveal"><div class="section-heading"><div><span class="eyebrow">Recent reports</span><h2>Incidents</h2></div><a href="/incidents/">View all <b>→</b></a></div><div class="post-grid">${recordCards(data.incidents, 'incident')}</div></section>
-    <section class="status-section post-reader-section reveal"><div class="section-heading"><div><span class="eyebrow">Dispatches</span><h2>System posts</h2></div><a href="/posts/">View all <b>→</b></a></div>${postReader(data.posts)}</section>
-  </main>`;
-  const observer = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); } }), { threshold: .12 });
-  root.querySelectorAll('.reveal').forEach((element) => observer.observe(element));
+  const discordState = data.discordApi?.rateLimited ? 'outage' : ['operational','normal','ok','none'].includes(data.discordApi?.state) ? 'operational' : data.discordApi?.state === 'degraded' || data.discordApi?.state === 'minor' ? 'degraded' : !data.discordApi?.state || data.discordApi.state === 'unknown' ? 'unknown' : 'outage';
+  const services = [{name:'TheSecretary.xyz Website',kind:'website',state:monitor.status || 'unknown',uptime:monitor.uptime?.['90']},{name:'The Secretary™ Discord',kind:'discord',state:discordState,uptime:null},...((data.servers?.length ? data.servers : defaultServers).map((server) => ({...server,kind:'server',state:server.status || 'operational'})))];
+  const overall = services.some((item) => stateClass(item.state) === 'outage') ? 'outage' : services.some((item) => stateClass(item.state) === 'degraded') ? 'degraded' : 'operational';
+  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past 90 days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor)).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
+  root.querySelectorAll('[data-chart-range]').forEach((button) => button.addEventListener('click', () => { root.querySelectorAll('[data-chart-range]').forEach((item) => item.classList.toggle('active', item === button)); drawChart(data, button.dataset.chartRange); }));
+  const dialog = root.querySelector('[data-status-subscribe-dialog]');
+  root.querySelector('[data-subscribe-open]').onclick = () => dialog.showModal();
+  root.querySelector('[data-subscribe-close]').onclick = () => dialog.close();
+  root.querySelector('[data-status-subscribe-form]').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const message = form.querySelector('[data-subscribe-message]');
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    try { await statusApi('subscribe', {email:new FormData(form).get('email')}); message.textContent = 'Subscription confirmed.'; form.reset(); }
+    catch (error) { message.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  drawChart(data);
 }
 
 async function load() {
   await mountLayout('status');
-  try { const data = await statusApi('status'); data.posts = await getPublishedPosts(6).catch(() => []); render(data); }
-  catch (error) {
-    root.innerHTML = `<main class="container page"><section class="not-found-panel"><span class="eyebrow">Monitor connection</span><h1>Live data is temporarily unavailable.</h1><p>${esc(error.message)}</p><button class="button primary" data-retry>Retry</button></section></main>`;
-    root.querySelector('[data-retry]').onclick = load;
-  }
+  try { render(await statusApi('status')); }
+  catch (error) { root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-load-error"><h1>Status data is temporarily unavailable.</h1><p>${esc(error.message)}</p><button data-retry>Retry</button></div></div></main>`; root.querySelector('[data-retry]').onclick = load; }
 }
-
-document.addEventListener('submit', async (event) => {
-  if (!event.target.matches('[data-subscribe-form]')) return;
-  event.preventDefault();
-  const form = event.target;
-  const button = form.querySelector('button');
-  button.disabled = true;
-  try { await statusApi('subscribe', { email: new FormData(form).get('email') }); showToast('Subscription confirmed.'); form.reset(); }
-  catch (error) { showToast(error.message, 'error'); }
-  finally { button.disabled = false; }
-});
 
 load();

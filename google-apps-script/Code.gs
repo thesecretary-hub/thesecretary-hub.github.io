@@ -1,5 +1,5 @@
 const STATUS_CONFIG = {
-  SITE_URL: 'https://thesecretary-hub.github.io',
+  SITE_URL: 'https://hub.thesecretary.xyz',
   ADMIN_EMAIL: 'dikshitaggarwal007@gmail.com',
   TIMEZONE: 'Asia/Kolkata',
   CHECK_INTERVAL_MINUTES: 5,
@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS = {
   monitorName: 'The Secretary',
   description: 'Discord bot, dashboard, and public web service.',
   targetUrl: 'https://thesecretary.xyz/',
-  discordStatusUrl: 'https://thesecretary.xyz/api/status/discord-rate-limit',
+  discordStatusUrl: 'https://discordstatus.com/api/v2/status.json',
   failureThreshold: 1,
   webhookHttp: '',
   webhookDiscord: '',
@@ -137,7 +137,7 @@ function runScheduledChecks() {
     const settings = getSettings_();
     updateMaintenanceStates_(settings);
     const http = probeHttp_(settings.targetUrl);
-    const discord = probeDiscord_(settings.discordStatusUrl);
+    const discord = probeDiscord_('https://discordstatus.com/api/v2/status.json');
     appendCheck_(http, discord);
     processHttpTransition_(http, settings);
     processDiscordTransition_(discord, settings);
@@ -164,7 +164,9 @@ function probeDiscord_(url) {
     const response = UrlFetchApp.fetch(url, {muteHttpExceptions: true, followRedirects: true, headers: {'User-Agent': 'TheSecretaryStatus/2.0'}});
     const payload = JSON.parse(response.getContentText() || '{}');
     const rateLimited = Boolean(payload.rate_limited || payload.rateLimited || payload.discord_http_global_blocked || Number(payload.http_status) === 429);
-    return {rateLimited: rateLimited, state: rateLimited ? 'rate_limited' : String(payload.state || 'unknown'), checkedAt: payload.checked_at || payload.checkedAt || new Date().toISOString(), raw: payload};
+    const indicator = String(payload.status && payload.status.indicator || '').toLowerCase();
+    const officialState = indicator === 'none' ? 'operational' : indicator === 'minor' ? 'degraded' : indicator === 'major' || indicator === 'critical' ? 'down' : '';
+    return {rateLimited: rateLimited, state: rateLimited ? 'rate_limited' : (officialState || String(payload.state || 'unknown')), checkedAt: payload.page && payload.page.updated_at || payload.checked_at || payload.checkedAt || new Date().toISOString(), raw: payload};
   } catch (error) {
     return {rateLimited: false, state: 'unavailable', checkedAt: new Date().toISOString(), error: error.message || String(error)};
   }
@@ -217,11 +219,15 @@ function statusPayload_(admin) {
   let status = latest ? (latest.up ? 'operational' : 'down') : 'unknown';
   let headline = status === 'operational' ? 'All systems operational' : (status === 'unknown' ? 'Awaiting the first check' : 'The Secretary is unavailable');
   let message = status === 'operational' ? 'The Secretary is responding normally.' : (status === 'unknown' ? 'Monitoring data will appear after setup completes.' : 'Automated monitoring detected an availability issue.');
-  if (discord.rateLimited) { status = 'down'; headline = 'Discord API rate limited'; message = 'Discord is currently limiting The Secretary API requests.'; }
+  if (discord.rateLimited || ['down','major_outage','critical','unavailable'].indexOf(discord.state) >= 0) { status = 'down'; headline = 'Discord API disruption'; message = 'Discord is reporting an API disruption.'; }
+  else if (discord.state === 'degraded' || discord.state === 'minor') { status = 'maintenance'; headline = 'Discord API degraded'; message = 'Discord is reporting degraded API performance.'; }
   else if (activeIncidents.some(function (x) { return x.impact === 'critical'; })) { status = 'down'; headline = activeIncidents[0].title; message = activeIncidents[0].excerpt || 'A critical incident is being investigated.'; }
   else if (activeMaintenance.some(function (x) { return x.status === 'active'; })) { status = 'maintenance'; headline = 'Maintenance in progress'; message = 'Some systems may not work to their fullest.'; }
   const monitor = buildMonitor_(settings, checks, latest);
-  const payload = {generatedAt: new Date().toISOString(), monitor: monitor, summary: {status: status, headline: headline, message: message}, discordApi: discord, incidents: incidents.slice(0, admin ? 250 : 5), maintenance: maintenance.slice(0, admin ? 250 : 5), posts: posts.slice(0, admin ? 250 : 6)};
+  const publicCutoff = Date.now() - 15 * 86400000;
+  const publicIncidents = incidents.filter(function (item) { return new Date(item.startedAt || item.updatedAt).getTime() >= publicCutoff; });
+  const publicMaintenance = maintenance.filter(function (item) { return new Date(item.endAt || item.startAt || item.updatedAt).getTime() >= publicCutoff; });
+  const payload = {generatedAt: new Date().toISOString(), monitor: monitor, summary: {status: status, headline: headline, message: message}, discordApi: discord, servers: publicServerStatus_(), incidents: admin ? incidents.slice(0,250) : publicIncidents, maintenance: admin ? maintenance.slice(0,250) : publicMaintenance, posts: posts.slice(0, admin ? 250 : 6)};
   if (admin) Object.assign(payload, {settings: settings, recentChecks: checks.slice(-50).reverse(), subscriberCount: activeSubscribers_().length, webhooks: {http: settings.webhookHttp, discord: settings.webhookDiscord, post: settings.webhookPost, maintenance: settings.webhookMaintenance}, webhookTemplates: getTemplates_(), deliveryIssues: collectDeliveryIssues_(incidents, maintenance), hostManagement: getServerAdminPayload_(false)});
   return payload;
 }
@@ -233,12 +239,30 @@ function buildMonitor_(settings, checks, latest) {
     const scoped = checks.filter(function (x) { return new Date(x.checkedAt).getTime() >= cutoff; });
     return scoped.length ? scoped.filter(function (x) { return x.up; }).length / scoped.length * 100 : null;
   }
-  const responseSeries = checks.filter(function (x) { return now - new Date(x.checkedAt).getTime() <= 48 * 3600000 && Number.isFinite(Number(x.responseMs)); }).map(function (x) { return {checkedAt: x.checkedAt, responseMs: Number(x.responseMs), up: Boolean(x.up)}; });
-  const responseValues = responseSeries.map(function (x) { return x.responseMs; });
+  function responseWindow(hours) {
+    const rows = checks.filter(function (x) { return now - new Date(x.checkedAt).getTime() <= hours * 3600000 && Number.isFinite(Number(x.responseMs)); });
+    const stride = Math.max(1, Math.ceil(rows.length / 180));
+    const sampled = [];
+    for (let i=0;i<rows.length;i+=stride) {
+      const group = rows.slice(i,i+stride);
+      sampled.push({checkedAt:group[group.length-1].checkedAt,responseMs:group.reduce(function(sum,row){return sum+Number(row.responseMs);},0)/group.length,up:group.every(function(row){return Boolean(row.up);})});
+    }
+    return sampled;
+  }
+  const dayResponse = responseWindow(24);
+  const responseValues = dayResponse.map(function (x) { return x.responseMs; });
   const dayGroups = {};
   checks.forEach(function (x) { const day = String(x.checkedAt).slice(0, 10); if (!dayGroups[day]) dayGroups[day] = []; dayGroups[day].push(x); });
-  const history = Object.keys(dayGroups).sort().map(function (date) { const rows = dayGroups[date]; return {date: date, uptime: rows.filter(function (x) { return x.up; }).length / rows.length * 100}; });
-  return {name: settings.monitorName, description: settings.description, status: latest ? (latest.up ? 'operational' : 'down') : 'unknown', statusCode: latest ? latest.statusCode : null, responseMs: latest ? latest.responseMs : null, lastCheckAt: latest ? latest.checkedAt : null, checkIntervalMinutes: 5, consecutiveFailures: Number(PropertiesService.getScriptProperties().getProperty('HTTP_FAILURES') || 0), uptime: {'24h': uptime(1), '7': uptime(7), '30': uptime(30), '90': uptime(90), '120': uptime(120)}, response: {periodHours: 48, samples: responseSeries.length, series: responseSeries, averageMs: responseValues.length ? responseValues.reduce(function (a,b) { return a+b; },0)/responseValues.length : null, minimumMs: responseValues.length ? Math.min.apply(null,responseValues) : null, maximumMs: responseValues.length ? Math.max.apply(null,responseValues) : null}, history: history};
+  const history = Object.keys(dayGroups).sort().map(function (date) { const rows = dayGroups[date]; const discordRows=rows.filter(function(x){return x.discordState && x.discordState!=='unknown';}); return {date: date, uptime: rows.filter(function (x) { return x.up; }).length / rows.length * 100, discordUptime: discordRows.length ? discordRows.filter(function(x){return !x.discordRateLimited && ['operational','normal','ok','none'].indexOf(x.discordState)>=0;}).length/discordRows.length*100 : null}; });
+  return {name: settings.monitorName, description: settings.description, status: latest ? (latest.up ? 'operational' : 'down') : 'unknown', statusCode: latest ? latest.statusCode : null, responseMs: latest ? latest.responseMs : null, lastCheckAt: latest ? latest.checkedAt : null, checkIntervalMinutes: 5, consecutiveFailures: Number(PropertiesService.getScriptProperties().getProperty('HTTP_FAILURES') || 0), uptime: {'24h': uptime(1), '7': uptime(7), '30': uptime(30), '90': uptime(90), '120': uptime(120)}, response: {samples: dayResponse.length, series: {day:dayResponse,week:responseWindow(24*7),month:responseWindow(24*30)}, averageMs: responseValues.length ? responseValues.reduce(function (a,b) { return a+b; },0)/responseValues.length : null, minimumMs: responseValues.length ? Math.min.apply(null,responseValues) : null, maximumMs: responseValues.length ? Math.max.apply(null,responseValues) : null}, history: history};
+}
+
+function publicServerStatus_() {
+  const offline = getOfflineServers_();
+  return HOST_SERVERS.map(function (server) {
+    const hold = offline[server.key] || null;
+    return {key:server.key,name:server.name,region:server.region,status:hold?'down':'operational',label:hold?'Blacklisted':'Operational',offlineUntil:hold?hold.until:null,reason:hold?hold.reason:''};
+  });
 }
 
 function createIncident_(data, automated) {
