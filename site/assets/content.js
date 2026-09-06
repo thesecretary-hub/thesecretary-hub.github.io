@@ -4,8 +4,9 @@ import { getPostBySlug, safeRichHtml } from './post-store.js';
 
 const root = document.querySelector('[data-content-root]');
 const query = new URLSearchParams(location.search);
-const type = query.get('type');
-const slug = query.get('slug');
+const postRoute = location.pathname.match(/^\/posts\/([^/]+)\/?$/);
+const type = postRoute ? 'post' : query.get('type');
+const slug = postRoute ? decodeURIComponent(postRoute[1]) : query.get('slug');
 await mountLayout(type === 'post' ? 'posts' : type === 'incident' ? 'incidents' : '');
 try {
   if (!['incident','maintenance','post'].includes(type) || !slug) throw new Error('This page address is incomplete.');

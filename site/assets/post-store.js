@@ -13,7 +13,7 @@ export const FALLBACK_POST = Object.freeze({
   isFallback: true,
 });
 
-export const postHref = (post) => post?.href || `/content/?type=post&slug=${encodeURIComponent(post?.slug || '')}`;
+export const postHref = (post) => post?.href || `/posts/${encodeURIComponent(post?.slug || '')}`;
 export const postDate = (post) => post?.published_at || post?.created_at;
 
 export async function getPublishedPosts(limit = 24) {

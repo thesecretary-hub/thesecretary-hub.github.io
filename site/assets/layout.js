@@ -38,7 +38,7 @@ function footer() {
 }
 
 function ensureHubAssets() {
-  if (!document.querySelector('link[href*="hub.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="/assets/hub.css?v=1.6.0">');
+  if (!document.querySelector('link[href*="hub.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="/assets/hub.css?v=1.7.0">');
   if (!document.querySelector('link[href*="Bowlby+One+SC"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC:wght@400&amp;display=swap" rel="stylesheet">');
 }
 
@@ -106,7 +106,7 @@ export async function openProfile(username, viewerProfile = null) {
   ]);
   const activity = [
     ...topics.map((item) => ({ at:item.created_at, text:`Started “${item.title}”`, href:`/topic/?slug=${encodeURIComponent(item.slug)}` })),
-    ...comments.map((item) => ({ at:item.created_at, text:'Commented on a system post', href:`/content/?type=post&slug=${encodeURIComponent(item.post_slug)}` })),
+    ...comments.map((item) => ({ at:item.created_at, text:'Commented on a system post', href:`/posts/${encodeURIComponent(item.post_slug)}` })),
     ...replies.map((item) => ({ at:item.created_at, text:'Replied to a forum discussion', href:'/forums/' })),
   ].sort((a,b) => new Date(b.at)-new Date(a.at)).slice(0,6);
   const banner = publicImage('profile-media', profile.banner_path);
