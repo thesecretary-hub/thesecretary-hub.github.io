@@ -1,0 +1,24 @@
+body.post-reading-mode{background:#000;color:#fff}
+body.post-reading-mode:before,body.post-reading-mode:after{display:none}
+.post-story-page{overflow:hidden;padding:90px 0 110px;background:#000}
+.post-story{margin:0 auto}
+.post-story-hero{display:block;width:min(910px,calc(100% - 48px));aspect-ratio:16/9;margin:0 auto;object-fit:cover}
+.post-story-header,.post-story-body{width:min(650px,calc(100% - 48px));margin-right:auto;margin-left:auto}
+.post-story-header{padding:84px 0 38px}
+.post-story-tag{display:flex;align-items:center;gap:12px;color:#fff;font-size:13px;font-weight:850}
+.post-story-tag span{color:#999;font-size:18px;font-weight:400}
+.post-story-header h1{margin:42px 0 4px;color:#fff;font-size:clamp(42px,5vw,64px);font-weight:780;line-height:.98;letter-spacing:-.055em}
+.post-story-header p{max-width:620px;margin:10px 0 0;color:#fff;font-size:clamp(22px,2.3vw,32px);font-weight:700;line-height:1.08;letter-spacing:-.035em}
+.post-story-header time{display:block;margin-top:40px;color:#aaa;font-size:13px}
+.post-story-body{padding:0;color:#fff;font-size:18px;line-height:1.55}
+.post-story-body p{margin:0 0 32px}
+.post-story-body h2,.post-story-body h3{margin:62px 0 20px;color:#fff;line-height:1.08;letter-spacing:-.035em}
+.post-story-body h2{font-size:38px}.post-story-body h3{font-size:28px}
+.post-story-body a{color:#fff;text-decoration:underline;text-underline-offset:3px}
+.post-story-body blockquote{margin:42px 0;padding-left:22px;border-left:3px solid #777;color:#d5d5d5}
+.post-story-body figure{width:min(1090px,calc(100vw - 48px));margin:72px 0 72px 50%;transform:translateX(-50%)}
+.post-story-body figure img,.post-story-body>img{display:block;width:100%;height:auto;border-radius:0}
+.post-story-body>img{position:relative;left:50%;width:min(1090px,calc(100vw - 48px));max-width:none;margin:72px 0;transform:translateX(-50%)}
+.post-story-body figcaption{margin-top:12px;color:#8e8e8e;font-size:12px;text-align:left}
+.post-story-page .comments-section{width:min(650px,calc(100% - 48px));margin:72px auto 0}
+@media(max-width:700px){.post-story-page{padding-top:72px}.post-story-hero{width:100%;aspect-ratio:16/9}.post-story-header{padding-top:52px}.post-story-header h1{margin-top:30px}.post-story-header time{margin-top:28px}.post-story-body{font-size:17px}.post-story-body figure,.post-story-body>img{width:100vw;margin-top:48px;margin-bottom:48px}}
