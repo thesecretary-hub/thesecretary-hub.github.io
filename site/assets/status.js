@@ -15,22 +15,24 @@ const defaultServers = [
   ['ohio','The-Secretary Ohio US','Ohio US'],
 ].map(([key,name,region]) => ({key,name,region,status:'operational',label:'Operational'}));
 
+function eventsForServiceDay(kind, date, events = []) {
+  if(kind === 'server') return [];
+  return events.filter(event => {
+    if(dayKey(new Date(event.startedAt || event.startAt)) !== dayKey(date)) return false;
+    if(event.recordType === 'maintenance') return true;
+    return kind === 'discord' ? event.source === 'discord' : event.source !== 'discord';
+  });
+}
+
 function serviceHistory(service, monitor, events = []) {
-  const history = new Map((monitor.history || []).map((day) => [day.date, day]));
   const today = new Date();
   return Array.from({length: 90}, (_, index) => {
     const date = new Date(today);
     date.setUTCDate(today.getUTCDate() - (89 - index));
-    const item = history.get(dayKey(date));
     let state = 'operational';
     let uptimeValue = 100;
-    if (service.kind === 'server') { state = 'operational'; uptimeValue = 100; }
-    else if (item && service.kind === 'website') {
-      const uptime = item.uptime;
-      if(uptime !== null && uptime !== undefined){uptimeValue = uptime;state = uptime >= 99.9 ? 'operational' : uptime >= 90 ? 'degraded' : 'outage';}
-    }
     if(service.kind !== 'server'){
-      const dailyEvents=events.filter(event=>dayKey(new Date(event.startedAt||event.startAt))===dayKey(date));
+      const dailyEvents=eventsForServiceDay(service.kind,date,events);
       const incident=dailyEvents.find(event=>event.recordType==='incident'&&(service.kind==='discord'?event.source==='discord':event.source!=='discord'));
       const maintenance=dailyEvents.find(event=>event.recordType==='maintenance');
       if(incident){state=incident.impact==='critical'||incident.impact==='major'?'outage':'degraded';uptimeValue=null;}
@@ -38,7 +40,7 @@ function serviceHistory(service, monitor, events = []) {
     }
     if (index === 89 && service.state !== 'operational') state = service.state;
     const value = uptimeValue === null || uptimeValue === undefined ? stateLabel(state) : `${Number(uptimeValue).toFixed(3)}%`;
-    return `<i class="${stateClass(state)}" data-history-day="${dayKey(date)}" data-history-date="${esc(formatDate(date, {dateStyle:'long'}))}" data-history-value="${esc(value)}"></i>`;
+    return `<i class="${stateClass(state)}" data-history-kind="${service.kind}" data-history-day="${dayKey(date)}" data-history-date="${esc(formatDate(date, {dateStyle:'long'}))}" data-history-value="${esc(value)}"></i>`;
   }).join('');
 }
 
@@ -79,11 +81,18 @@ function durationText(startValue, endValue) {
 
 function historyTooltip(bar, data) {
   const source = data.historyEvents || [...(data.incidents || []).map(item=>({...item,recordType:'incident'})),...(data.maintenance || []).map(item=>({...item,recordType:'maintenance'}))];
-  const incidents = source.filter(item => item.recordType === 'incident' && dayKey(new Date(item.startedAt || item.updatedAt)) === bar.dataset.historyDay).map(item => ({label:item.impact === 'critical' || item.impact === 'major' ? 'Major outage' : 'Partial outage', duration:durationText(item.startedAt, item.resolvedAt)}));
-  const maintenance = source.filter(item => item.recordType === 'maintenance' && dayKey(new Date(item.startAt || item.updatedAt)) === bar.dataset.historyDay).map(item => ({label:'Maintenance', duration:durationText(item.startAt, item.status === 'completed' ? item.endAt : null)}));
+  const relevant=eventsForServiceDay(bar.dataset.historyKind,new Date(`${bar.dataset.historyDay}T00:00:00Z`),source);
+  const incidents = relevant.filter(item => item.recordType === 'incident').map(item => ({label:item.impact === 'critical' || item.impact === 'major' ? 'Major outage' : 'Partial outage', duration:durationText(item.startedAt, item.resolvedAt)}));
+  const maintenance = relevant.filter(item => item.recordType === 'maintenance').map(item => ({label:'Maintenance', duration:durationText(item.startAt, item.status === 'completed' ? item.endAt : null)}));
   const events = [...incidents, ...maintenance];
   if (!events.length) return `<span>${esc(bar.dataset.historyDate)}</span><strong>${esc(bar.dataset.historyValue)}</strong>`;
   return `<span>${esc(bar.dataset.historyDate)}</span><div class="history-tooltip-events">${events.map(event => `<p><b>${event.label === 'Major outage' ? '×' : event.label === 'Maintenance' ? '●' : '▲'}</b><strong>${esc(event.label)}</strong><em>${esc(event.duration)}</em></p>`).join('')}</div><small>Related</small><div class="history-tooltip-related">The Secretary was not responding</div>`;
+}
+
+function smoothChartPath(series,x,y) {
+  const points=series.map((item,index)=>({x:x(index),y:y(Number(item.responseMs))}));
+  if(points.length===1)return `M${points[0].x},${points[0].y}`;
+  return points.slice(1).reduce((path,point,index)=>{const previous=points[index];const middle=(previous.x+point.x)/2;return `${path} C${middle.toFixed(1)},${previous.y.toFixed(1)} ${middle.toFixed(1)},${point.y.toFixed(1)} ${point.x.toFixed(1)},${point.y.toFixed(1)}`;},`M${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`);
 }
 
 function drawChart(data, range = 'day') {
@@ -102,12 +111,13 @@ function drawChart(data, range = 'day') {
   const high = Math.max(low + 100, Math.ceil(Math.max(...values) / 50) * 50 + 50);
   const x = (index) => 20 + index / Math.max(1, series.length - 1) * 730;
   const y = (value) => 155 - (value - low) / (high - low) * 120;
-  const path = series.map((item, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(Number(item.responseMs)).toFixed(1)}`).join(' ');
+  const path = smoothChartPath(series,x,y);
   const lines = [0,.33,.66,1].map((part) => { const py=35+part*120; const label=Math.round(high-part*(high-low)); return `<line x1="20" y1="${py}" x2="750" y2="${py}"/><text x="765" y="${py+4}">${label}</text>`; }).join('');
   const label = (item) => new Intl.DateTimeFormat(undefined, range === 'day' ? {hour:'2-digit',minute:'2-digit'} : {month:'short',day:'numeric'}).format(new Date(item.checkedAt));
-  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" d="${path}"/><circle class="chart-hover-halo" r="11" hidden/><circle class="chart-hover-dot" r="5" hidden/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
+  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" pathLength="1" d="${path}"/><line class="chart-hover-guide" y1="35" y2="155" hidden/><circle class="chart-hover-halo" r="11" hidden/><circle class="chart-hover-dot" r="5" hidden/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
   const dot = svg.querySelector('.chart-hover-dot');
   const halo = svg.querySelector('.chart-hover-halo');
+  const guide = svg.querySelector('.chart-hover-guide');
   const tooltip = root.querySelector('[data-status-tooltip]');
   svg.onpointermove = (event) => {
     const rect = svg.getBoundingClientRect();
@@ -116,16 +126,19 @@ function drawChart(data, range = 'day') {
     const point = series[index];
     dot.hidden = false;
     halo.hidden = false;
+    guide.hidden = false;
     dot.setAttribute('cx', x(index));
     dot.setAttribute('cy', y(Number(point.responseMs)));
     halo.setAttribute('cx', x(index));
     halo.setAttribute('cy', y(Number(point.responseMs)));
+    guide.setAttribute('x1', x(index));
+    guide.setAttribute('x2', x(index));
     tooltip.innerHTML = `<span>${esc(formatDate(point.checkedAt, {dateStyle:'medium',timeStyle:'short'}))}</span><strong>${Math.round(point.responseMs)}ms</strong>`;
     tooltip.classList.add('visible');
     tooltip.style.left = `${event.clientX}px`;
     tooltip.style.top = `${event.clientY - 14}px`;
   };
-  svg.onpointerleave = () => { dot.hidden = true; halo.hidden = true; tooltip.classList.remove('visible'); };
+  svg.onpointerleave = () => { dot.hidden = true; halo.hidden = true; guide.hidden = true; tooltip.classList.remove('visible'); };
 }
 
 function render(data) {

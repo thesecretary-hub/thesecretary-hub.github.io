@@ -244,11 +244,9 @@ function buildMonitor_(settings, checks, latest) {
   }
   function responseWindow(hours) {
     const rows = checks.filter(function (x) { return now - new Date(x.checkedAt).getTime() <= hours * 3600000 && Number.isFinite(Number(x.responseMs)); });
-    const stride = Math.max(1, Math.ceil(rows.length / 180));
     const sampled = [];
-    for (let i=0;i<rows.length;i+=stride) {
-      const group = rows.slice(i,i+stride);
-      sampled.push({checkedAt:group[group.length-1].checkedAt,responseMs:group.reduce(function(sum,row){return sum+Number(row.responseMs);},0)/group.length,up:group.every(function(row){return Boolean(row.up);})});
+    for (let i=rows.length-1;i>=0;i-=4) {
+      sampled.unshift({checkedAt:rows[i].checkedAt,responseMs:Number(rows[i].responseMs),up:Boolean(rows[i].up)});
     }
     return sampled;
   }
