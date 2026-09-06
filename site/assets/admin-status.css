@@ -10,4 +10,6 @@
 .record-editor form{padding:18px}
 .record-editor-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
 .record-editor-actions .button{width:auto}
+.record-editor-actions .danger{border-color:#7f2525;background:#260b0b;color:#ff9696}
+.record-editor-actions .danger:hover{background:#471111;color:#fff}
 @media(max-width:900px){.status-admin-grid>.span-5,.status-admin-grid>.span-7{grid-column:1/-1}}

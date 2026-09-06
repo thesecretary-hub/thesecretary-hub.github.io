@@ -15,20 +15,26 @@ const defaultServers = [
   ['ohio','The-Secretary Ohio US','Ohio US'],
 ].map(([key,name,region]) => ({key,name,region,status:'operational',label:'Operational'}));
 
-function serviceHistory(service, monitor) {
+function serviceHistory(service, monitor, events = []) {
   const history = new Map((monitor.history || []).map((day) => [day.date, day]));
   const today = new Date();
   return Array.from({length: 90}, (_, index) => {
     const date = new Date(today);
     date.setUTCDate(today.getUTCDate() - (89 - index));
     const item = history.get(dayKey(date));
-    let state = 'unknown';
-    let uptimeValue = null;
+    let state = 'operational';
+    let uptimeValue = 100;
     if (service.kind === 'server') { state = 'operational'; uptimeValue = 100; }
-    else if (item) {
-      const uptime = service.kind === 'discord' ? item.discordUptime : item.uptime;
-      uptimeValue = uptime;
-      state = uptime === null || uptime === undefined ? 'unknown' : uptime >= 99.9 ? 'operational' : uptime >= 90 ? 'degraded' : 'outage';
+    else if (item && service.kind === 'website') {
+      const uptime = item.uptime;
+      if(uptime !== null && uptime !== undefined){uptimeValue = uptime;state = uptime >= 99.9 ? 'operational' : uptime >= 90 ? 'degraded' : 'outage';}
+    }
+    if(service.kind !== 'server'){
+      const dailyEvents=events.filter(event=>dayKey(new Date(event.startedAt||event.startAt))===dayKey(date));
+      const incident=dailyEvents.find(event=>event.recordType==='incident'&&(service.kind==='discord'?event.source==='discord':event.source!=='discord'));
+      const maintenance=dailyEvents.find(event=>event.recordType==='maintenance');
+      if(incident){state=incident.impact==='critical'||incident.impact==='major'?'outage':'degraded';uptimeValue=null;}
+      else if(maintenance){state='degraded';uptimeValue=null;}
     }
     if (index === 89 && service.state !== 'operational') state = service.state;
     const value = uptimeValue === null || uptimeValue === undefined ? stateLabel(state) : `${Number(uptimeValue).toFixed(3)}%`;
@@ -36,9 +42,9 @@ function serviceHistory(service, monitor) {
   }).join('');
 }
 
-function serviceRow(service, monitor) {
+function serviceRow(service, monitor, events) {
   const detail = service.offlineUntil ? ` until ${formatDate(service.offlineUntil, {dateStyle:'medium',timeStyle:'short'})}` : '';
-  return `<article class="status-service"><div class="status-service-head"><h2>${esc(service.name)}</h2><span class="${stateClass(service.state)}">${esc(service.label || stateLabel(service.state))}${esc(detail)}</span></div><div class="status-history" aria-label="90-day status history">${serviceHistory(service, monitor)}</div><div class="status-history-foot"><span>90 days ago</span><b></b><span>${service.kind === 'server' ? '100.0% uptime' : service.uptime === null || service.uptime === undefined ? 'Collecting uptime' : `${Number(service.uptime).toFixed(2)}% uptime`}</span><b></b><span>Today</span></div></article>`;
+  return `<article class="status-service"><div class="status-service-head"><h2>${esc(service.name)}</h2><span class="${stateClass(service.state)}">${esc(service.label || stateLabel(service.state))}${esc(detail)}</span></div><div class="status-history" aria-label="90-day status history">${serviceHistory(service, monitor, events)}</div><div class="status-history-foot"><span>90 days ago</span><b></b><span>${service.kind === 'server' ? '100.0% uptime' : service.uptime === null || service.uptime === undefined ? 'No outages recorded' : `${Number(service.uptime).toFixed(2)}% uptime`}</span><b></b><span>Today</span></div></article>`;
 }
 
 function incidentDays(incidents = [], maintenance = []) {
@@ -83,7 +89,11 @@ function historyTooltip(bar, data) {
 function drawChart(data, range = 'day') {
   const svg = root.querySelector('[data-response-chart]');
   const storedSeries = data.monitor?.response?.series;
-  const series = (Array.isArray(storedSeries) ? storedSeries : storedSeries?.[range]) || [];
+  const source = (Array.isArray(storedSeries) ? storedSeries : storedSeries?.[range] || storedSeries?.month || storedSeries?.week || storedSeries?.day) || [];
+  const hours = {day:24,week:24*7,month:24*30}[range] || 24;
+  const newestAt = source.length ? new Date(source[source.length-1].checkedAt).getTime() : Date.now();
+  const cutoff = newestAt - hours * 3600000;
+  const series = source.filter(item => new Date(item.checkedAt).getTime() >= cutoff);
   const latest = series[series.length - 1];
   root.querySelector('[data-chart-latest]').textContent = latest ? `${Math.round(latest.responseMs)} ms` : 'No data';
   if (!series.length) { svg.innerHTML = '<text x="410" y="100" text-anchor="middle">Response samples will appear after scheduled checks run.</text>'; return; }
@@ -123,7 +133,9 @@ function render(data) {
   const discordState = data.discordApi?.rateLimited ? 'outage' : ['operational','normal','ok','none'].includes(data.discordApi?.state) ? 'operational' : data.discordApi?.state === 'degraded' || data.discordApi?.state === 'minor' ? 'degraded' : !data.discordApi?.state || data.discordApi.state === 'unknown' ? 'unknown' : 'outage';
   const services = [{name:'TheSecretary.xyz Website',kind:'website',state:monitor.status || 'unknown',uptime:monitor.uptime?.['90']},{name:'The Secretary™ Discord',kind:'discord',state:discordState,uptime:null},...((data.servers?.length ? data.servers : defaultServers).map((server) => ({...server,kind:'server',state:server.status || 'operational'})))];
   const overall = services.some((item) => stateClass(item.state) === 'outage') ? 'outage' : services.some((item) => stateClass(item.state) === 'degraded') ? 'degraded' : 'operational';
-  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past 90 days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor)).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><div class="status-tooltip" data-status-tooltip></div><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
+  (data.incidents||[]).forEach(item=>sessionStorage.setItem(`status-record:incident:${item.slug}`,JSON.stringify(item)));
+  (data.maintenance||[]).forEach(item=>sessionStorage.setItem(`status-record:maintenance:${item.slug}`,JSON.stringify(item)));
+  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past 90 days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor, data.historyEvents||[])).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><div class="status-tooltip" data-status-tooltip></div><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
   root.querySelectorAll('[data-chart-range]').forEach((button) => button.addEventListener('click', () => { root.querySelectorAll('[data-chart-range]').forEach((item) => item.classList.toggle('active', item === button)); drawChart(data, button.dataset.chartRange); }));
   const tooltip = root.querySelector('[data-status-tooltip]');
   root.querySelector('.service-list').addEventListener('pointermove', (event) => {

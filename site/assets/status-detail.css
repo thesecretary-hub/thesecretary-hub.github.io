@@ -1,5 +1,6 @@
 body.status-detail-mode{background:#000;color:#fff}
 body.status-detail-mode:before,body.status-detail-mode:after{display:none}
+.status-detail-loader{display:grid;place-content:center;justify-items:center;gap:16px;min-height:78vh;background:#000;color:#999}.status-detail-loader span{width:34px;height:34px;border:3px solid #282828;border-top-color:#fff;border-radius:50%;animation:status-spin .75s linear infinite}.status-detail-loader p{margin:0;font:13px Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}@keyframes status-spin{to{transform:rotate(360deg)}}
 .status-detail-page{width:min(880px,calc(100% - 40px));min-height:78vh;margin:0 auto;padding:128px 0 110px;font-family:Arial,Helvetica,sans-serif}
 .status-detail-page>nav{margin-bottom:58px}.status-detail-page>nav a{color:#999;text-decoration:none}.status-detail-page>nav a:hover{color:#fff}
 .status-detail-page article>header{text-align:center}.status-detail-page article>header h1{margin:0;color:#ef7656;font-size:clamp(34px,5vw,58px);font-weight:400;line-height:1.06}.status-detail-page article>header p{margin:24px 0 0;color:#8d8d8d;font-size:13px;letter-spacing:.04em;text-transform:uppercase}

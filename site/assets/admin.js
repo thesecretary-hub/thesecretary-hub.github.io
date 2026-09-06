@@ -26,7 +26,9 @@ async function load(){
 }
 
 const intro=(eyebrow,title,text)=>`<div class="admin-intro"><div><span class="eyebrow">${eyebrow}</span><h1>${title}</h1><p>${text}</p></div></div><nav class="admin-subnav"><a class="${page==='overview'?'active':''}" href="/admin/">Overview</a><a class="${page==='incidents'?'active':''}" href="/admin/incidents/">Incidents</a><a class="${page==='maintenance'?'active':''}" href="/admin/maintenance/">Maintenance</a><a class="${page==='posts'?'active':''}" href="/admin/posts/">Posts</a><a class="${page==='webhooks'?'active':''}" href="/admin/webhooks/">Webhooks</a><a class="${page==='servers'?'active':''}" href="/admin/servers/">Servers</a></nav>`;
-const field=(label,name,type='text',value='',extra='')=>`<label>${label}<${type==='textarea'?'textarea':'input'} name="${name}" ${type==='textarea'?'rows="5"':`type="${type}"`} ${extra}>${type==='textarea'?esc(value):''}${type==='textarea'?'':`</input>`}</label>`.replace('></input>',` value="${esc(value)}">`);
+const field=(label,name,type='text',value='',extra='')=>type==='textarea'
+  ? `<label>${label}<textarea name="${name}" rows="4" ${extra}>${esc(value)}</textarea></label>`
+  : `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;
 const updateText=(item,status)=>[...(item.updates||[])].reverse().find(update=>update.status===status)?.message||'';
 const localDateTime=value=>{if(!value)return '';const date=new Date(value);const shifted=new Date(date.getTime()-date.getTimezoneOffset()*60000);return shifted.toISOString().slice(0,16);};
 const recordLink=(type,item)=>`/${type === 'incident' ? 'incidents' : 'maintenance'}/${encodeURIComponent(item.slug)}`;
@@ -51,8 +53,9 @@ function servers(data){const host=data.hostManagement||{};return `${intro('Infra
 
 function bind(){
   document.querySelector('[data-admin-logout]').onclick=async()=>{await supabase.auth.signOut();location.href='/';};
+  if(page==='incidents'||page==='maintenance')document.querySelectorAll('.record-editor form').forEach(form=>{const actions=form.querySelector('.record-editor-actions');const id=form.querySelector('[name="id"]')?.value;if(!actions||!id)return;const remove=document.createElement('button');remove.type='button';remove.className='button small danger';remove.dataset.actionButton=page==='incidents'?'delete_incident':'delete_maintenance';remove.dataset.id=id;remove.dataset.confirm=`Delete this ${page==='incidents'?'incident':'maintenance'} permanently?`;remove.textContent='Delete';actions.append(remove);});
   document.querySelectorAll('[data-admin-form]').forEach(form=>form.addEventListener('submit',async event=>{event.preventDefault();const button=form.querySelector('button');button.disabled=true;try{await statusApi(form.dataset.adminForm,Object.fromEntries(new FormData(form)));showToast('Saved.');await load();}catch(error){showToast(error.message,'error');button.disabled=false;}}));
-  document.querySelectorAll('[data-action-button]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const data={...button.dataset};delete data.actionButton;await statusApi(button.dataset.actionButton,data);showToast('Action completed.');await load();}catch(error){showToast(error.message,'error');button.disabled=false;}});
+  document.querySelectorAll('[data-action-button]').forEach(button=>button.onclick=async()=>{if(button.dataset.confirm&&!window.confirm(button.dataset.confirm))return;button.disabled=true;try{const data={...button.dataset};delete data.actionButton;delete data.confirm;await statusApi(button.dataset.actionButton,data);showToast('Action completed.');await load();}catch(error){showToast(error.message,'error');button.disabled=false;}});
 }
 
 bootstrap();

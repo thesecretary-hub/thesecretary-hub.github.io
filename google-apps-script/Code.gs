@@ -106,6 +106,7 @@ function route_(action, data, isPost) {
       case 'create_incident': result = createIncident_(data, false); break;
       case 'edit_incident': result = editIncident_(data); break;
       case 'add_incident_update': result = addIncidentUpdate_(data); break;
+      case 'delete_incident': deleteRecord_('incidents', data.id); result = {}; break;
       case 'create_maintenance': result = createMaintenance_(data); break;
       case 'edit_maintenance': result = editMaintenance_(data); break;
       case 'cancel_maintenance': result = concludeMaintenance_(data.id); break;
@@ -228,7 +229,7 @@ function statusPayload_(admin) {
   const historyCutoff = Date.now() - 90 * 86400000;
   const publicIncidents = incidents.filter(function (item) { return new Date(item.startedAt || item.updatedAt).getTime() >= publicCutoff; });
   const publicMaintenance = maintenance.filter(function (item) { return new Date(item.endAt || item.startAt || item.updatedAt).getTime() >= publicCutoff; });
-  const historyEvents = incidents.filter(function(item){return new Date(item.startedAt||item.updatedAt).getTime()>=historyCutoff;}).map(function(item){return{recordType:'incident',title:item.title,impact:item.impact,status:item.status,startedAt:item.startedAt,resolvedAt:item.resolvedAt};}).concat(maintenance.filter(function(item){return new Date(item.startAt||item.updatedAt).getTime()>=historyCutoff;}).map(function(item){return{recordType:'maintenance',title:item.title,status:item.status,startAt:item.startAt,endAt:item.endAt};}));
+  const historyEvents = incidents.filter(function(item){return new Date(item.startedAt||item.updatedAt).getTime()>=historyCutoff;}).map(function(item){return{recordType:'incident',title:item.title,impact:item.impact,status:item.status,source:item.source,startedAt:item.startedAt,resolvedAt:item.resolvedAt};}).concat(maintenance.filter(function(item){return new Date(item.startAt||item.updatedAt).getTime()>=historyCutoff;}).map(function(item){return{recordType:'maintenance',title:item.title,status:item.status,startAt:item.startAt,endAt:item.endAt};}));
   const payload = {generatedAt: new Date().toISOString(), monitor: monitor, summary: {status: status, headline: headline, message: message}, discordApi: discord, servers: publicServerStatus_(), incidents: admin ? incidents.slice(0,250) : publicIncidents, maintenance: admin ? maintenance.slice(0,250) : publicMaintenance, historyEvents:historyEvents, posts: posts.slice(0, admin ? 250 : 6)};
   if (admin) Object.assign(payload, {settings: settings, recentChecks: checks.slice(-50).reverse(), subscriberCount: activeSubscribers_().length, webhooks: {http: settings.webhookHttp, discord: settings.webhookDiscord, post: settings.webhookPost, maintenance: settings.webhookMaintenance}, webhookTemplates: getTemplates_(), deliveryIssues: collectDeliveryIssues_(incidents, maintenance), hostManagement: getServerAdminPayload_(false)});
   return payload;
