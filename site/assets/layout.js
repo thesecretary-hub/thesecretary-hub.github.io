@@ -38,7 +38,7 @@ function footer() {
 }
 
 function ensureHubAssets() {
-  if (!document.querySelector('link[href*="hub.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="/assets/hub.css?v=1.8.0">');
+  if (!document.querySelector('link[href*="hub.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="/assets/hub.css?v=1.9.0">');
   if (!document.querySelector('link[href*="Bowlby+One+SC"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC:wght@400&amp;display=swap" rel="stylesheet">');
 }
 

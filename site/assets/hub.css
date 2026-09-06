@@ -101,6 +101,7 @@ html,body,.hub-body,.public-shell-body,.recent-section,.updates-signup,.hub-foot
 .showcase{height:auto!important;min-height:0!important;margin-top:70px}
 .showcase-sticky{position:sticky!important;z-index:0;top:0;height:100vh}
 .showcase-foreground{position:relative;z-index:4;margin-top:-300px;background:linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,.78) 155px,#000 330px)}
-.showcase-content{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;width:100%;min-height:500px!important;margin:0!important;padding:105px max(7vw,50px) 90px!important;background:transparent!important;align-content:start}
+.showcase-media:after{position:absolute;z-index:4;inset:0;background:#000;content:"";opacity:var(--showcase-dim,0);pointer-events:none}
+.showcase-content{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;width:100%;min-height:650px!important;margin:0!important;padding:360px max(7vw,50px) 45px!important;background:transparent!important;align-content:start}
 .showcase .recent-section{position:relative;z-index:5;padding-top:55px;background:#000}
-@media(max-width:640px){.showcase{margin-top:40px}.showcase-foreground{margin-top:-240px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.82) 115px,#000 255px)}.showcase-content{min-height:410px!important;padding:80px 24px 65px!important}.showcase .recent-section{padding-top:45px}}
+@media(max-width:640px){.showcase{margin-top:40px}.showcase-foreground{margin-top:-240px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.82) 115px,#000 255px)}.showcase-content{min-height:520px!important;padding:280px 24px 35px!important}.showcase .recent-section{padding-top:35px}}
