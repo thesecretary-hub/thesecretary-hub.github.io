@@ -1,0 +1,13 @@
+.record-edit-list{display:grid;gap:12px}
+.record-editor{padding:0;overflow:hidden;border:1px solid #303030;background:#080808}
+.record-editor summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px;cursor:pointer;list-style:none}
+.record-editor summary::-webkit-details-marker{display:none}
+.record-editor summary span:first-child{display:grid;gap:5px}
+.record-editor summary strong{font-size:16px}
+.record-editor summary small{color:#8c8c8c;text-transform:capitalize}
+.record-editor summary span:last-child{color:#aaa;font-size:12px;text-transform:uppercase;letter-spacing:.12em}
+.record-editor[open] summary{border-bottom:1px solid #303030;background:#0d0d0d}
+.record-editor form{padding:18px}
+.record-editor-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.record-editor-actions .button{width:auto}
+@media(max-width:900px){.status-admin-grid>.span-5,.status-admin-grid>.span-7{grid-column:1/-1}}

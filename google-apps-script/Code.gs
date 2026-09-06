@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS = {
   monitorName: 'The Secretary',
   description: 'Discord bot, dashboard, and public web service.',
   targetUrl: 'https://thesecretary.xyz/',
-  discordStatusUrl: 'https://thesecretary.xyz/health',
+  discordStatusUrl: 'https://thesecretary.xyz/api/status/discord',
   failureThreshold: 1,
   webhookHttp: '',
   webhookDiscord: '',
@@ -104,6 +104,7 @@ function route_(action, data, isPost) {
       case 'send_otp': result = sendOtp_(data.code); break;
       case 'update_settings': result = updateSettings_(data); break;
       case 'create_incident': result = createIncident_(data, false); break;
+      case 'edit_incident': result = editIncident_(data); break;
       case 'add_incident_update': result = addIncidentUpdate_(data); break;
       case 'create_maintenance': result = createMaintenance_(data); break;
       case 'edit_maintenance': result = editMaintenance_(data); break;
@@ -137,7 +138,7 @@ function runScheduledChecks() {
     const settings = getSettings_();
     updateMaintenanceStates_(settings);
     const http = probeHttp_(settings.targetUrl);
-    const discord = probeDiscord_('https://thesecretary.xyz/health');
+    const discord = probeDiscord_('https://thesecretary.xyz/api/status/discord');
     appendCheck_(http, discord);
     processHttpTransition_(http, settings);
     processDiscordTransition_(discord, settings);
@@ -163,15 +164,11 @@ function probeDiscord_(url) {
   try {
     const response = UrlFetchApp.fetch(url, {muteHttpExceptions: true, followRedirects: true, headers: {'User-Agent': 'TheSecretaryStatus/2.0'}});
     const payload = JSON.parse(response.getContentText() || '{}');
-    const discord = payload.discord || payload.discord_api || payload.discordApi || payload;
-    const rateLimited = Boolean(discord.rate_limited || discord.rateLimited || discord.discord_http_global_blocked || Number(discord.http_status) === 429 || response.getResponseCode() === 429);
-    const rawState = String(discord.state || discord.status || payload.state || payload.status || '').toLowerCase();
-    const explicitFailure = ['down','offline','unavailable','failed','error','critical'].indexOf(rawState) >= 0;
-    const healthy = response.getResponseCode() >= 200 && response.getResponseCode() < 300 && !explicitFailure;
-    const degraded = ['degraded','warning','partial','maintenance'].indexOf(rawState) >= 0;
-    return {rateLimited: rateLimited, state: rateLimited ? 'rate_limited' : healthy ? 'operational' : degraded ? 'degraded' : 'unavailable', checkedAt: discord.checked_at || discord.checkedAt || payload.checked_at || payload.checkedAt || new Date().toISOString(), raw: payload};
+    const rateLimited = Boolean(payload.rate_limited || payload.global_rate_limit || payload.discord_http_global_blocked || Number(payload.http_status) === 429 || response.getResponseCode() === 429);
+    const state = rateLimited ? 'rate_limited' : response.getResponseCode() >= 200 && response.getResponseCode() < 300 ? 'operational' : 'unknown';
+    return {rateLimited:rateLimited,state:state,checkedAt:payload.checked_at||new Date().toISOString(),gatewayLatencyMs:Number(payload.gateway_latency_ms),responseMs:Number(payload.response_ms),nextCheckAt:payload.next_check_at||null,raw:payload};
   } catch (error) {
-    return {rateLimited: false, state: 'unavailable', checkedAt: new Date().toISOString(), error: error.message || String(error)};
+    return {rateLimited: false, state: 'unknown', checkedAt: new Date().toISOString(), error: error.message || String(error)};
   }
 }
 
@@ -228,9 +225,11 @@ function statusPayload_(admin) {
   else if (activeMaintenance.some(function (x) { return x.status === 'active'; })) { status = 'maintenance'; headline = 'Maintenance in progress'; message = 'Some systems may not work to their fullest.'; }
   const monitor = buildMonitor_(settings, checks, latest);
   const publicCutoff = Date.now() - 15 * 86400000;
+  const historyCutoff = Date.now() - 90 * 86400000;
   const publicIncidents = incidents.filter(function (item) { return new Date(item.startedAt || item.updatedAt).getTime() >= publicCutoff; });
   const publicMaintenance = maintenance.filter(function (item) { return new Date(item.endAt || item.startAt || item.updatedAt).getTime() >= publicCutoff; });
-  const payload = {generatedAt: new Date().toISOString(), monitor: monitor, summary: {status: status, headline: headline, message: message}, discordApi: discord, servers: publicServerStatus_(), incidents: admin ? incidents.slice(0,250) : publicIncidents, maintenance: admin ? maintenance.slice(0,250) : publicMaintenance, posts: posts.slice(0, admin ? 250 : 6)};
+  const historyEvents = incidents.filter(function(item){return new Date(item.startedAt||item.updatedAt).getTime()>=historyCutoff;}).map(function(item){return{recordType:'incident',title:item.title,impact:item.impact,status:item.status,startedAt:item.startedAt,resolvedAt:item.resolvedAt};}).concat(maintenance.filter(function(item){return new Date(item.startAt||item.updatedAt).getTime()>=historyCutoff;}).map(function(item){return{recordType:'maintenance',title:item.title,status:item.status,startAt:item.startAt,endAt:item.endAt};}));
+  const payload = {generatedAt: new Date().toISOString(), monitor: monitor, summary: {status: status, headline: headline, message: message}, discordApi: discord, servers: publicServerStatus_(), incidents: admin ? incidents.slice(0,250) : publicIncidents, maintenance: admin ? maintenance.slice(0,250) : publicMaintenance, historyEvents:historyEvents, posts: posts.slice(0, admin ? 250 : 6)};
   if (admin) Object.assign(payload, {settings: settings, recentChecks: checks.slice(-50).reverse(), subscriberCount: activeSubscribers_().length, webhooks: {http: settings.webhookHttp, discord: settings.webhookDiscord, post: settings.webhookPost, maintenance: settings.webhookMaintenance}, webhookTemplates: getTemplates_(), deliveryIssues: collectDeliveryIssues_(incidents, maintenance), hostManagement: getServerAdminPayload_(false)});
   return payload;
 }
@@ -271,11 +270,26 @@ function publicServerStatus_() {
 function createIncident_(data, automated) {
   const now = new Date().toISOString();
   const title = requiredText_(data.title, 120, 'Incident title is required.');
-  const slug = uniqueSlug_('incidents', data.slug || title);
+  const slug = randomPublicSlug_('incidents');
   const item = {id: Utilities.getUuid(), slug: slug, title: title, excerpt: cleanText_(data.excerpt || data.message, 300), contentHtml: cleanHtml_(data.content_html), impact: ['minor','major','critical'].indexOf(data.impact) >= 0 ? data.impact : 'minor', status: 'investigating', source: cleanText_(data.source, 20) || (automated ? 'http' : 'manual'), startedAt: now, resolvedAt: null, updatedAt: now, automated: Boolean(automated), updates: [{status: 'investigating', message: requiredText_(data.message, 3000, 'Incident update is required.'), createdAt: now}]};
   writeRecord_('incidents', item);
   if (!automated) notifyEvent_('http_down', item, getSettings_());
   return {item: item};
+}
+
+function editIncident_(data) {
+  const item=findRecordById_('incidents',data.id);if(!item)throw new Error('Incident not found.');
+  const previousStatus=item.status;
+  item.title=requiredText_(data.title,120,'Incident title is required.');
+  item.impact=['minor','major','critical'].indexOf(data.impact)>=0?data.impact:item.impact;
+  const existing={};(item.updates||[]).forEach(function(update){existing[update.status]=update;});
+  const updates=[];
+  ['investigating','identified','monitoring','resolved'].forEach(function(status){const message=cleanText_(data[status+'_message'],3000);if(message)updates.push({status:status,message:message,createdAt:existing[status]&&existing[status].createdAt||new Date().toISOString()});});
+  if(!updates.length)throw new Error('At least one incident update is required.');
+  item.updates=updates;item.status=updates[updates.length-1].status;item.resolvedAt=item.status==='resolved'?(existing.resolved&&existing.resolved.createdAt||new Date().toISOString()):null;item.excerpt=cleanText_(data.excerpt||updates[0].message,300);item.updatedAt=new Date().toISOString();
+  writeRecord_('incidents',item);
+  if(previousStatus!=='resolved'&&item.status==='resolved')notifyEvent_(item.source==='discord'?'discord_normal':'http_up',item,getSettings_());
+  return{item:item};
 }
 
 function addIncidentUpdate_(data) {
@@ -296,7 +310,8 @@ function resolveIncident_(id, message) {
 function createMaintenance_(data) {
   const start = new Date(data.start_at); const end = new Date(data.end_at); if (!start.getTime() || !end.getTime() || end <= start) throw new Error('Maintenance dates are invalid.');
   const now = new Date().toISOString(); const title = requiredText_(data.title,120,'Maintenance title is required.');
-  const item = {id:Utilities.getUuid(),slug:uniqueSlug_('maintenance',data.slug||title),title:title,excerpt:cleanText_(data.description,300),description:requiredText_(data.description,3000,'Maintenance description is required.'),contentHtml:cleanHtml_(data.content_html),status:'scheduled',startAt:start.toISOString(),endAt:end.toISOString(),createdAt:now,updatedAt:now,notifiedStart:false,notifiedEnd:false};
+  const note=requiredText_(data.note||data.description,3000,'Maintenance note is required.');
+  const item = {id:Utilities.getUuid(),slug:randomPublicSlug_('maintenance'),title:title,excerpt:cleanText_(note,300),description:note,scheduledMessage:cleanText_(data.scheduled_message,3000)||'Maintenance is scheduled.',startedMessage:cleanText_(data.started_message,3000)||'Scheduled maintenance is now in progress.',note:note,conclusionMessage:cleanText_(data.conclusion_message,3000)||'Maintenance is expected to conclude at the scheduled end time.',contentHtml:cleanHtml_(data.content_html),status:'scheduled',startAt:start.toISOString(),endAt:end.toISOString(),createdAt:now,updatedAt:now,notifiedStart:false,notifiedEnd:false};
   writeRecord_('maintenance',item); updateMaintenanceStates_(getSettings_()); return {item:item};
 }
 
@@ -386,7 +401,9 @@ function testWebhook_(kind) {
 
 function editContent_(data) {
   const map={incident:'incidents',maintenance:'maintenance',post:'posts'};const sheet=map[data.type];if(!sheet)throw new Error('Unknown page type.');const item=findRecordById_(sheet,data.id);if(!item)throw new Error('Page not found.');
-  item.title=requiredText_(data.title,120,'Title is required.');item.slug=normalizeSlug_(data.slug||item.title);ensureSlugAvailable_(sheet,item.slug,item.id);item.excerpt=cleanText_(data.excerpt||item.excerpt,300);item.contentHtml=cleanHtml_(data.content_html);item.updatedAt=new Date().toISOString();writeRecord_(sheet,item);return{item:item};
+  item.title=requiredText_(data.title,120,'Title is required.');
+  if(sheet==='posts'){item.slug=normalizeSlug_(data.slug||item.title);ensureSlugAvailable_(sheet,item.slug,item.id);}
+  item.excerpt=cleanText_(data.excerpt||item.excerpt,300);item.contentHtml=cleanHtml_(data.content_html);item.updatedAt=new Date().toISOString();writeRecord_(sheet,item);return{item:item};
 }
 
 function updateMaintenanceStates_(settings) {
@@ -451,7 +468,7 @@ function notifyEvent_(event, item, settings, channels) {
     maintenance_end: 'Maintenance concluded: ' + item.title
   };
   const pageType = event === 'post' ? 'post' : event.indexOf('maintenance_') === 0 ? 'maintenance' : 'incident';
-  const pageUrl = STATUS_CONFIG.SITE_URL + '/content/?type=' + encodeURIComponent(pageType) + '&slug=' + encodeURIComponent(item.slug);
+  const pageUrl = pageType === 'post' ? STATUS_CONFIG.SITE_URL + '/posts/' + encodeURIComponent(item.slug) : STATUS_CONFIG.SITE_URL + '/' + (pageType === 'incident' ? 'incidents' : 'maintenance') + '/' + encodeURIComponent(item.slug);
   const content = applyTemplate_(getTemplates_()[event] || '', item, pageUrl);
   const selected = channels || {discord: true, email: true, requireWebhook: false};
   const result = {};
@@ -619,15 +636,22 @@ function processHostAutomation_(http, discord, settings) {
 
 function editMaintenance_(data) {
   const item = findRecordById_('maintenance', data.id); if (!item) throw new Error('Maintenance page not found.');
+  const previousStatus=item.status;
   const title = requiredText_(data.title,120,'Maintenance title is required.');
-  const slug = normalizeSlug_(data.slug || title); ensureSlugAvailable_('maintenance',slug,item.id);
   const startAt = new Date(data.start_at); const endAt = new Date(data.end_at);
   if (!Number.isFinite(startAt.getTime()) || !Number.isFinite(endAt.getTime()) || endAt <= startAt) throw new Error('Maintenance end must be after its start.');
   const now = Date.now();
-  item.title=title; item.slug=slug; item.excerpt=cleanText_(data.description,300); item.description=cleanText_(data.description,3000);
+  const note=requiredText_(data.note||data.description,3000,'Maintenance note is required.');
+  item.title=title; item.excerpt=cleanText_(note,300); item.description=note; item.note=note;
+  item.scheduledMessage=cleanText_(data.scheduled_message,3000)||item.scheduledMessage||'Maintenance is scheduled.';
+  item.startedMessage=cleanText_(data.started_message,3000)||item.startedMessage||'Scheduled maintenance is now in progress.';
+  item.conclusionMessage=cleanText_(data.conclusion_message,3000)||item.conclusionMessage||'Maintenance is expected to conclude at the scheduled end time.';
   item.contentHtml=cleanHtml_(data.content_html); item.startAt=startAt.toISOString(); item.endAt=endAt.toISOString(); item.updatedAt=new Date().toISOString();
   if (item.status !== 'cancelled') item.status = now < startAt.getTime() ? 'scheduled' : (now < endAt.getTime() ? 'active' : 'completed');
-  writeRecord_('maintenance',item); return{item:item};
+  writeRecord_('maintenance',item);
+  if(previousStatus==='scheduled'&&item.status==='active'&&!item.notifiedStart){item.notifiedStart=true;writeRecord_('maintenance',item);notifyEvent_('maintenance_start',item,getSettings_());}
+  if(previousStatus!=='completed'&&item.status==='completed'&&!item.notifiedEnd){item.notifiedEnd=true;writeRecord_('maintenance',item);notifyEvent_('maintenance_end',item,getSettings_());}
+  return{item:item};
 }
 
 function startAutomaticHostSwitch_(reason) {
@@ -1231,6 +1255,7 @@ function sortRecords_(items,key) { return items.sort(function(a,b){return new Da
 function activeSubscribers_() { const rows=getSheet_('subscribers').getDataRange().getValues();return rows.slice(1).filter(function(r){return r[2]===true||String(r[2]).toLowerCase()==='true';}).map(function(r){return{email:String(r[0]),token:String(r[1])};}); }
 
 function uniqueSlug_(sheet,value) { const base=normalizeSlug_(value)||'update';let slug=base;let n=2;while(findRecordBySlug_(sheet,slug)){slug=base+'-'+n++;}return slug; }
+function randomPublicSlug_(sheet) { let slug='';do{slug=Utilities.getUuid().replace(/-/g,'').slice(0,12);}while(findRecordBySlug_(sheet,slug));return slug; }
 function ensureSlugAvailable_(sheet,slug,id) { const found=findRecordBySlug_(sheet,slug);if(found&&String(found.id)!==String(id))throw new Error('That slug is already in use.'); }
 function normalizeSlug_(value) { return String(value||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120); }
 function requiredText_(value,max,message) { const text=cleanText_(value,max);if(!text)throw new Error(message);return text; }

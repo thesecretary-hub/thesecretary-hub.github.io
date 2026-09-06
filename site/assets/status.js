@@ -32,7 +32,7 @@ function serviceHistory(service, monitor) {
     }
     if (index === 89 && service.state !== 'operational') state = service.state;
     const value = uptimeValue === null || uptimeValue === undefined ? stateLabel(state) : `${Number(uptimeValue).toFixed(3)}%`;
-    return `<i class="${stateClass(state)}" data-history-date="${esc(formatDate(date, {dateStyle:'long'}))}" data-history-value="${esc(value)}"></i>`;
+    return `<i class="${stateClass(state)}" data-history-day="${dayKey(date)}" data-history-date="${esc(formatDate(date, {dateStyle:'long'}))}" data-history-value="${esc(value)}"></i>`;
   }).join('');
 }
 
@@ -50,16 +50,34 @@ function incidentDays(incidents = [], maintenance = []) {
     date.setDate(today.getDate() - index);
     const daily = records.filter((item) => dayKey(new Date(item.recordAt)) === dayKey(date));
     const body = daily.length ? daily.map((item) => {
-      if (item.recordType === 'maintenance') return `<div class="status-record maintenance"><h4>${esc(item.title)}</h4><p><strong>${esc(item.status || 'Scheduled')}</strong> - ${esc(item.description || item.excerpt || '')}</p><time>${formatDate(item.startAt, {dateStyle:'medium',timeStyle:'short'})}</time></div>`;
+      if (item.recordType === 'maintenance') return `<a class="status-record maintenance" href="/maintenance/${encodeURIComponent(item.slug)}"><h4>${esc(item.title)}</h4><p><strong>${esc(item.status || 'Scheduled')}</strong> - ${esc(item.note || item.description || item.excerpt || '')}</p><time>${formatDate(item.startAt, {dateStyle:'medium',timeStyle:'short'})}</time></a>`;
       const updates = [...(item.updates || [])].reverse();
-      return `<div class="status-record incident"><h4>${esc(item.title)}</h4>${updates.map((update) => `<p><strong>${esc(update.status)}</strong> - ${esc(update.message)}</p><time>${formatDate(update.createdAt, {dateStyle:'medium',timeStyle:'short'})}</time>`).join('')}</div>`;
+      return `<a class="status-record incident" href="/incidents/${encodeURIComponent(item.slug)}"><h4>${esc(item.title)}</h4>${updates.map((update) => `<p><strong>${esc(update.status)}</strong> - ${esc(update.message)}</p><time>${formatDate(update.createdAt, {dateStyle:'medium',timeStyle:'short'})}</time>`).join('')}</a>`;
     }).join('') : `<p class="no-incidents">${index === 0 ? 'No incidents reported today.' : 'No incidents reported.'}</p>`;
     return `<section class="incident-day"><h3>${formatDate(date, {dateStyle:'medium'})}</h3>${body}</section>`;
   }).join('');
 }
 
 function chartMarkup() {
-  return `<section class="metrics-section"><header><span>System metrics</span><nav aria-label="Response period"><button class="active" data-chart-range="day">Day</button><button data-chart-range="week">Week</button><button data-chart-range="month">Month</button></nav></header><div class="response-chart"><div class="response-chart-title"><h2>Website Response Time</h2><strong data-chart-latest>—</strong></div><svg data-response-chart viewBox="0 0 820 190" role="img" aria-label="Website response time graph"></svg></div></section>`;
+  return `<section class="metrics-section"><header><span>System metrics</span><nav aria-label="Response period"><button class="active" data-chart-range="day">Day</button><button data-chart-range="week">Week</button><button data-chart-range="month">Month</button></nav></header><div class="response-chart"><div class="response-chart-title"><h2>Response Time</h2><strong data-chart-latest>—</strong></div><svg data-response-chart viewBox="0 0 820 190" role="img" aria-label="Response time graph"></svg></div></section>`;
+}
+
+function durationText(startValue, endValue) {
+  const start = new Date(startValue).getTime();
+  const end = endValue ? new Date(endValue).getTime() : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 'Duration unavailable';
+  const minutes = Math.max(0, Math.round((end - start) / 60000));
+  const hours = Math.floor(minutes / 60);
+  return `${hours} hrs ${minutes % 60} mins`;
+}
+
+function historyTooltip(bar, data) {
+  const source = data.historyEvents || [...(data.incidents || []).map(item=>({...item,recordType:'incident'})),...(data.maintenance || []).map(item=>({...item,recordType:'maintenance'}))];
+  const incidents = source.filter(item => item.recordType === 'incident' && dayKey(new Date(item.startedAt || item.updatedAt)) === bar.dataset.historyDay).map(item => ({label:item.impact === 'critical' || item.impact === 'major' ? 'Major outage' : 'Partial outage', duration:durationText(item.startedAt, item.resolvedAt)}));
+  const maintenance = source.filter(item => item.recordType === 'maintenance' && dayKey(new Date(item.startAt || item.updatedAt)) === bar.dataset.historyDay).map(item => ({label:'Maintenance', duration:durationText(item.startAt, item.status === 'completed' ? item.endAt : null)}));
+  const events = [...incidents, ...maintenance];
+  if (!events.length) return `<span>${esc(bar.dataset.historyDate)}</span><strong>${esc(bar.dataset.historyValue)}</strong>`;
+  return `<span>${esc(bar.dataset.historyDate)}</span><div class="history-tooltip-events">${events.map(event => `<p><b>${event.label === 'Major outage' ? '×' : event.label === 'Maintenance' ? '●' : '▲'}</b><strong>${esc(event.label)}</strong><em>${esc(event.duration)}</em></p>`).join('')}</div><small>Related</small><div class="history-tooltip-related">The Secretary was not responding</div>`;
 }
 
 function drawChart(data, range = 'day') {
@@ -77,8 +95,9 @@ function drawChart(data, range = 'day') {
   const path = series.map((item, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(Number(item.responseMs)).toFixed(1)}`).join(' ');
   const lines = [0,.33,.66,1].map((part) => { const py=35+part*120; const label=Math.round(high-part*(high-low)); return `<line x1="20" y1="${py}" x2="750" y2="${py}"/><text x="765" y="${py+4}">${label}</text>`; }).join('');
   const label = (item) => new Intl.DateTimeFormat(undefined, range === 'day' ? {hour:'2-digit',minute:'2-digit'} : {month:'short',day:'numeric'}).format(new Date(item.checkedAt));
-  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" d="${path}"/><circle class="chart-hover-dot" r="6" hidden/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
+  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" d="${path}"/><circle class="chart-hover-halo" r="11" hidden/><circle class="chart-hover-dot" r="5" hidden/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
   const dot = svg.querySelector('.chart-hover-dot');
+  const halo = svg.querySelector('.chart-hover-halo');
   const tooltip = root.querySelector('[data-status-tooltip]');
   svg.onpointermove = (event) => {
     const rect = svg.getBoundingClientRect();
@@ -86,14 +105,17 @@ function drawChart(data, range = 'day') {
     const index = Math.max(0, Math.min(series.length - 1, Math.round((svgX - 20) / 730 * (series.length - 1))));
     const point = series[index];
     dot.hidden = false;
+    halo.hidden = false;
     dot.setAttribute('cx', x(index));
     dot.setAttribute('cy', y(Number(point.responseMs)));
+    halo.setAttribute('cx', x(index));
+    halo.setAttribute('cy', y(Number(point.responseMs)));
     tooltip.innerHTML = `<span>${esc(formatDate(point.checkedAt, {dateStyle:'medium',timeStyle:'short'}))}</span><strong>${Math.round(point.responseMs)}ms</strong>`;
     tooltip.classList.add('visible');
     tooltip.style.left = `${event.clientX}px`;
     tooltip.style.top = `${event.clientY - 14}px`;
   };
-  svg.onpointerleave = () => { dot.hidden = true; tooltip.classList.remove('visible'); };
+  svg.onpointerleave = () => { dot.hidden = true; halo.hidden = true; tooltip.classList.remove('visible'); };
 }
 
 function render(data) {
@@ -107,7 +129,7 @@ function render(data) {
   root.querySelector('.service-list').addEventListener('pointermove', (event) => {
     const bar = event.target.closest('[data-history-date]');
     if (!bar) { tooltip.classList.remove('visible'); return; }
-    tooltip.innerHTML = `<span>${esc(bar.dataset.historyDate)}</span><strong>${esc(bar.dataset.historyValue)}</strong>`;
+    tooltip.innerHTML = historyTooltip(bar, data);
     tooltip.classList.add('visible');
     tooltip.style.left = `${event.clientX}px`;
     tooltip.style.top = `${event.clientY - 14}px`;
