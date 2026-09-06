@@ -116,8 +116,9 @@ async function init() {
   const story = document.querySelector('[data-scroll-story]');
   const storyVideo = document.querySelector('[data-scroll-story-video]');
   const storyCopy = document.querySelector('[data-scroll-story-copy]');
+  const storyControl = document.querySelector('[data-scroll-story-control]');
   const storyProgress = document.querySelector('[data-scroll-story-progress]');
-  let storyDuration = 5;
+  let storyDuration = storyVideo.readyState >= 1 && Number.isFinite(storyVideo.duration) ? storyVideo.duration : 5;
   let storyFrame = 0;
   storyVideo.addEventListener('loadedmetadata', () => { storyDuration = storyVideo.duration || 5; updateStory(); });
   storyVideo.addEventListener('error', () => story.classList.add('video-error'), true);
@@ -133,8 +134,27 @@ async function init() {
     const reveal = Math.min(1, Math.max(0, (progress - .14) / .28));
     storyCopy.style.opacity = String(reveal);
     storyCopy.style.transform = `translateY(${(1 - reveal) * 72}px)`;
-    storyProgress.style.height = `${Math.max(3, progress * 100)}%`;
+    storyControl.style.setProperty('--story-progress', progress);
+    storyControl.setAttribute('aria-valuenow', String(Math.round(progress * 100)));
+    const thumbTravel = Math.max(0, storyControl.clientHeight - storyProgress.offsetHeight - 12);
+    storyProgress.style.top = `${6 + progress * thumbTravel}px`;
   };
+  const seekStory = (progress) => {
+    const travel = Math.max(1, story.offsetHeight - innerHeight);
+    scrollTo({ top: story.offsetTop + Math.min(1, Math.max(0, progress)) * travel, behavior: 'smooth' });
+  };
+  storyControl.addEventListener('click', (event) => {
+    const rect = storyControl.getBoundingClientRect();
+    seekStory((event.clientY - rect.top) / rect.height);
+  });
+  storyControl.addEventListener('keydown', (event) => {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const current = Number(storyControl.getAttribute('aria-valuenow')) / 100;
+    if (event.key === 'Home') seekStory(0);
+    else if (event.key === 'End') seekStory(1);
+    else seekStory(current + (event.key === 'ArrowDown' ? .08 : -.08));
+  });
   const queueStoryUpdate = () => { if (!storyFrame) storyFrame = requestAnimationFrame(updateStory); };
   addEventListener('scroll', queueStoryUpdate, { passive: true });
   addEventListener('resize', queueStoryUpdate, { passive: true });
