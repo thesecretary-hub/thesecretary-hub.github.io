@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS = {
   monitorName: 'The Secretary',
   description: 'Discord bot, dashboard, and public web service.',
   targetUrl: 'https://thesecretary.xyz/',
-  discordStatusUrl: 'https://discordstatus.com/api/v2/status.json',
+  discordStatusUrl: 'https://thesecretary.xyz/health',
   failureThreshold: 1,
   webhookHttp: '',
   webhookDiscord: '',
@@ -137,7 +137,7 @@ function runScheduledChecks() {
     const settings = getSettings_();
     updateMaintenanceStates_(settings);
     const http = probeHttp_(settings.targetUrl);
-    const discord = probeDiscord_('https://discordstatus.com/api/v2/status.json');
+    const discord = probeDiscord_('https://thesecretary.xyz/health');
     appendCheck_(http, discord);
     processHttpTransition_(http, settings);
     processDiscordTransition_(discord, settings);
@@ -163,10 +163,13 @@ function probeDiscord_(url) {
   try {
     const response = UrlFetchApp.fetch(url, {muteHttpExceptions: true, followRedirects: true, headers: {'User-Agent': 'TheSecretaryStatus/2.0'}});
     const payload = JSON.parse(response.getContentText() || '{}');
-    const rateLimited = Boolean(payload.rate_limited || payload.rateLimited || payload.discord_http_global_blocked || Number(payload.http_status) === 429);
-    const indicator = String(payload.status && payload.status.indicator || '').toLowerCase();
-    const officialState = indicator === 'none' ? 'operational' : indicator === 'minor' ? 'degraded' : indicator === 'major' || indicator === 'critical' ? 'down' : '';
-    return {rateLimited: rateLimited, state: rateLimited ? 'rate_limited' : (officialState || String(payload.state || 'unknown')), checkedAt: payload.page && payload.page.updated_at || payload.checked_at || payload.checkedAt || new Date().toISOString(), raw: payload};
+    const discord = payload.discord || payload.discord_api || payload.discordApi || payload;
+    const rateLimited = Boolean(discord.rate_limited || discord.rateLimited || discord.discord_http_global_blocked || Number(discord.http_status) === 429 || response.getResponseCode() === 429);
+    const rawState = String(discord.state || discord.status || payload.state || payload.status || '').toLowerCase();
+    const explicitFailure = ['down','offline','unavailable','failed','error','critical'].indexOf(rawState) >= 0;
+    const healthy = response.getResponseCode() >= 200 && response.getResponseCode() < 300 && !explicitFailure;
+    const degraded = ['degraded','warning','partial','maintenance'].indexOf(rawState) >= 0;
+    return {rateLimited: rateLimited, state: rateLimited ? 'rate_limited' : healthy ? 'operational' : degraded ? 'degraded' : 'unavailable', checkedAt: discord.checked_at || discord.checkedAt || payload.checked_at || payload.checkedAt || new Date().toISOString(), raw: payload};
   } catch (error) {
     return {rateLimited: false, state: 'unavailable', checkedAt: new Date().toISOString(), error: error.message || String(error)};
   }

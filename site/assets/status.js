@@ -23,13 +23,16 @@ function serviceHistory(service, monitor) {
     date.setUTCDate(today.getUTCDate() - (89 - index));
     const item = history.get(dayKey(date));
     let state = 'unknown';
-    if (service.kind === 'server') state = 'operational';
+    let uptimeValue = null;
+    if (service.kind === 'server') { state = 'operational'; uptimeValue = 100; }
     else if (item) {
       const uptime = service.kind === 'discord' ? item.discordUptime : item.uptime;
+      uptimeValue = uptime;
       state = uptime === null || uptime === undefined ? 'unknown' : uptime >= 99.9 ? 'operational' : uptime >= 90 ? 'degraded' : 'outage';
     }
     if (index === 89 && service.state !== 'operational') state = service.state;
-    return `<i class="${stateClass(state)}" title="${esc(dayKey(date))}: ${stateLabel(state)}"></i>`;
+    const value = uptimeValue === null || uptimeValue === undefined ? stateLabel(state) : `${Number(uptimeValue).toFixed(3)}%`;
+    return `<i class="${stateClass(state)}" data-history-date="${esc(formatDate(date, {dateStyle:'long'}))}" data-history-value="${esc(value)}"></i>`;
   }).join('');
 }
 
@@ -74,7 +77,23 @@ function drawChart(data, range = 'day') {
   const path = series.map((item, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(Number(item.responseMs)).toFixed(1)}`).join(' ');
   const lines = [0,.33,.66,1].map((part) => { const py=35+part*120; const label=Math.round(high-part*(high-low)); return `<line x1="20" y1="${py}" x2="750" y2="${py}"/><text x="765" y="${py+4}">${label}</text>`; }).join('');
   const label = (item) => new Intl.DateTimeFormat(undefined, range === 'day' ? {hour:'2-digit',minute:'2-digit'} : {month:'short',day:'numeric'}).format(new Date(item.checkedAt));
-  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" d="${path}"/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
+  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" d="${path}"/><circle class="chart-hover-dot" r="6" hidden/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
+  const dot = svg.querySelector('.chart-hover-dot');
+  const tooltip = root.querySelector('[data-status-tooltip]');
+  svg.onpointermove = (event) => {
+    const rect = svg.getBoundingClientRect();
+    const svgX = (event.clientX - rect.left) / rect.width * 820;
+    const index = Math.max(0, Math.min(series.length - 1, Math.round((svgX - 20) / 730 * (series.length - 1))));
+    const point = series[index];
+    dot.hidden = false;
+    dot.setAttribute('cx', x(index));
+    dot.setAttribute('cy', y(Number(point.responseMs)));
+    tooltip.innerHTML = `<span>${esc(formatDate(point.checkedAt, {dateStyle:'medium',timeStyle:'short'}))}</span><strong>${Math.round(point.responseMs)}ms</strong>`;
+    tooltip.classList.add('visible');
+    tooltip.style.left = `${event.clientX}px`;
+    tooltip.style.top = `${event.clientY - 14}px`;
+  };
+  svg.onpointerleave = () => { dot.hidden = true; tooltip.classList.remove('visible'); };
 }
 
 function render(data) {
@@ -82,8 +101,18 @@ function render(data) {
   const discordState = data.discordApi?.rateLimited ? 'outage' : ['operational','normal','ok','none'].includes(data.discordApi?.state) ? 'operational' : data.discordApi?.state === 'degraded' || data.discordApi?.state === 'minor' ? 'degraded' : !data.discordApi?.state || data.discordApi.state === 'unknown' ? 'unknown' : 'outage';
   const services = [{name:'TheSecretary.xyz Website',kind:'website',state:monitor.status || 'unknown',uptime:monitor.uptime?.['90']},{name:'The Secretary™ Discord',kind:'discord',state:discordState,uptime:null},...((data.servers?.length ? data.servers : defaultServers).map((server) => ({...server,kind:'server',state:server.status || 'operational'})))];
   const overall = services.some((item) => stateClass(item.state) === 'outage') ? 'outage' : services.some((item) => stateClass(item.state) === 'degraded') ? 'degraded' : 'operational';
-  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past 90 days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor)).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
+  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past 90 days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor)).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><div class="status-tooltip" data-status-tooltip></div><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
   root.querySelectorAll('[data-chart-range]').forEach((button) => button.addEventListener('click', () => { root.querySelectorAll('[data-chart-range]').forEach((item) => item.classList.toggle('active', item === button)); drawChart(data, button.dataset.chartRange); }));
+  const tooltip = root.querySelector('[data-status-tooltip]');
+  root.querySelector('.service-list').addEventListener('pointermove', (event) => {
+    const bar = event.target.closest('[data-history-date]');
+    if (!bar) { tooltip.classList.remove('visible'); return; }
+    tooltip.innerHTML = `<span>${esc(bar.dataset.historyDate)}</span><strong>${esc(bar.dataset.historyValue)}</strong>`;
+    tooltip.classList.add('visible');
+    tooltip.style.left = `${event.clientX}px`;
+    tooltip.style.top = `${event.clientY - 14}px`;
+  });
+  root.querySelector('.service-list').addEventListener('pointerleave', () => tooltip.classList.remove('visible'));
   const dialog = root.querySelector('[data-status-subscribe-dialog]');
   root.querySelector('[data-subscribe-open]').onclick = () => dialog.showModal();
   root.querySelector('[data-subscribe-close]').onclick = () => dialog.close();
