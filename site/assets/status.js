@@ -1,4 +1,4 @@
-import { statusApi } from './api.js';
+import { statusApi } from './api.js?v=6.5.0';
 import { esc, formatDate, mountLayout } from './layout.js';
 
 const root = document.querySelector('[data-status-root]');
@@ -6,7 +6,18 @@ document.body.classList.add('status-public-mode');
 
 const stateClass = (state) => state === 'operational' ? 'operational' : state === 'maintenance' || state === 'degraded' ? 'degraded' : state === 'unknown' ? 'unknown' : 'outage';
 const stateLabel = (state) => state === 'operational' ? 'Operational' : state === 'maintenance' || state === 'degraded' ? 'Degraded' : state === 'unknown' ? 'Awaiting data' : 'Disruption';
-const dayKey = (date) => date.toISOString().slice(0, 10);
+const STATUS_TIME_ZONE = 'Asia/Kolkata';
+const dayKey = (value) => {
+  const parts = new Intl.DateTimeFormat('en-US', {timeZone:STATUS_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));
+  const part = (type) => parts.find((item) => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
+const statusDateAtOffset = (offset = 0) => {
+  const [year, month, day] = dayKey(new Date()).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  date.setUTCDate(date.getUTCDate() - offset);
+  return date;
+};
 const defaultServers = [
   ['virginia','The-Secretary Virginia US','Virginia US'],
   ['singapore_n1','The-Secretary Singapore N-1','Singapore N-1'],
@@ -25,10 +36,8 @@ function eventsForServiceDay(kind, date, events = []) {
 }
 
 function serviceHistory(service, monitor, events = []) {
-  const today = new Date();
   return Array.from({length: 90}, (_, index) => {
-    const date = new Date(today);
-    date.setUTCDate(today.getUTCDate() - (89 - index));
+    const date = statusDateAtOffset(89 - index);
     let state = 'operational';
     let uptimeValue = 100;
     if(service.kind !== 'server'){
@@ -51,18 +60,15 @@ function serviceRow(service, monitor, events) {
 
 function incidentDays(incidents = [], maintenance = []) {
   const records = [...incidents.map((item) => ({...item, recordType:'incident', recordAt:item.startedAt || item.updatedAt})), ...maintenance.map((item) => ({...item, recordType:'maintenance', recordAt:item.startAt || item.updatedAt}))];
-  const today = new Date();
-  today.setHours(0,0,0,0);
   return Array.from({length:15}, (_, index) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - index);
+    const date = statusDateAtOffset(index);
     const daily = records.filter((item) => dayKey(new Date(item.recordAt)) === dayKey(date));
     const body = daily.length ? daily.map((item) => {
       if (item.recordType === 'maintenance') return `<a class="status-record maintenance" href="/maintenance/${encodeURIComponent(item.slug)}"><h4>${esc(item.title)}</h4><p><strong>${esc(item.status || 'Scheduled')}</strong> - ${esc(item.note || item.description || item.excerpt || '')}</p><time>${formatDate(item.startAt, {dateStyle:'medium',timeStyle:'short'})}</time></a>`;
       const updates = [...(item.updates || [])].reverse();
       return `<a class="status-record incident" href="/incidents/${encodeURIComponent(item.slug)}"><h4>${esc(item.title)}</h4>${updates.map((update) => `<p><strong>${esc(update.status)}</strong> - ${esc(update.message)}</p><time>${formatDate(update.createdAt, {dateStyle:'medium',timeStyle:'short'})}</time>`).join('')}</a>`;
     }).join('') : `<p class="no-incidents">${index === 0 ? 'No incidents reported today.' : 'No incidents reported.'}</p>`;
-    return `<section class="incident-day"><h3>${formatDate(date, {dateStyle:'medium'})}</h3>${body}</section>`;
+    return `<section class="incident-day"><h3>${formatDate(date, {dateStyle:'medium',timeZone:STATUS_TIME_ZONE})}</h3>${body}</section>`;
   }).join('');
 }
 

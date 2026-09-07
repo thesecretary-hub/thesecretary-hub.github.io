@@ -9,6 +9,7 @@ export async function statusApi(action = 'status', data = {}) {
   if (publicActions.has(action)) {
     const url = new URL(APP_CONFIG.appsScriptUrl);
     Object.entries(payload).forEach(([key, value]) => url.searchParams.set(key, String(value ?? '')));
+    url.searchParams.set('_ts', String(Date.now()));
     response = await fetch(url, { cache: 'no-store', redirect: 'follow' });
   } else {
     const { data: sessionData } = await supabase.auth.getSession();
