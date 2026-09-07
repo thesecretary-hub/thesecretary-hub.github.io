@@ -45,6 +45,31 @@ Users can still log in with email if this optional function is not yet deployed;
 
 The frontend contains only the Supabase publishable key. Never add a secret/service-role key, database password, or JWT signing secret to `site/` or Git.
 
+### Deploy the separate account-verification Apps Script
+
+The account code is intentionally separate from the status monitor.
+
+1. In Supabase **Authentication → General Configuration**, disable **Allow new users to sign up**. This prevents anyone from bypassing the Hub verification flow through the public Supabase signup endpoint. The Apps Script uses the server-only Admin API to create verified users.
+2. Create a new standalone Google Apps Script project.
+3. Copy `google-apps-script/auth/Code.gs` and `google-apps-script/auth/appsscript.json` into it.
+4. Add these Script Properties:
+
+```text
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+OTP_PEPPER
+```
+
+`OTP_PEPPER` must be a private random string of at least 24 characters. The service-role key and pepper must never be added to frontend files or Git.
+
+For a free sender isolated from a personal identity, create a dedicated Gmail account named **The Secretary™**, use the project logo as that account's profile picture, and create/deploy this Apps Script while signed into that account. `MailApp` sends from the Google account that owns and executes the deployment; no SMTP credentials or custom-domain mailbox are required.
+
+5. Run `setupAuthBackend()` once and approve its permissions. This installs the hourly cleanup that permanently removes Supabase users which remain unconfirmed for more than 24 hours.
+6. Deploy it as a web app with **Execute as: Me** and **Who has access: Anyone**.
+7. Copy its `/exec` URL into `site/assets/config.js` as `authScriptUrl`.
+
+Registration now emails a six-digit code from the dedicated Gmail account under the sender name **The Secretary™** before creating the Supabase user. Password reset uses the same branded sender and an emailed code followed by a short-lived reset ticket. Passwords are never stored in Apps Script Properties.
+
 ## 2. Create the administrator account
 
 1. Register normally at `/register/` using `dikshitaggarwal007@gmail.com`.

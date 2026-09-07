@@ -1,1 +1,73 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Log in — The Secretary Community</title><link rel="icon" href="/assets/images/favicon.png"><link rel="stylesheet" href="/assets/style.css?v=4.0.0"></head><body class="community-auth-body portal-auth-body" data-auth="login"><div data-site-header></div><main class="account-portal"><section class="account-form-pane"><div class="account-form-inner"><span class="portal-kicker">Account access&nbsp; // &nbsp;Secure channel</span><h1>Welcome<br>back.</h1><p class="portal-intro">Log in to continue your conversations.</p><div class="portal-safety"><span>♦</span> Never share your password or authentication details.</div><div class="alert error" data-auth-error hidden></div><div class="alert info" data-already-signed-in hidden>You are already signed in.</div><form class="portal-form" data-auth-form><label><span><b>01</b> Email or username</span><input name="identifier" autocomplete="username" required autofocus placeholder="Enter your email or username"></label><label><span><b>02</b> Password</span><input name="password" type="password" autocomplete="current-password" required placeholder="Enter your password"></label><button class="portal-submit" type="submit"><span>Log in securely</span><b>→</b></button></form><div class="portal-form-footer"><a href="/register/">Create an account</a><span>Session remembered securely</span></div></div></section><aside class="account-image-pane"><div class="account-image-number">01</div><div class="account-image-caption"><span>♟ 25K R$ &nbsp;|&nbsp; The Secretary™ // Account access</span><h2>Your place in the conversation is waiting.</h2></div></aside></main><script type="module" src="/assets/auth.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Log in — The Secretary Community</title>
+  <link rel="icon" href="/assets/images/favicon.png">
+  <link rel="preload" as="image" href="/assets/images/login-portal.png">
+  <link rel="stylesheet" href="/assets/style.css?v=5.3.0">
+</head>
+<body class="community-auth-body portal-auth-body login-auth-body" data-auth="login">
+  <div data-site-header></div>
+  <main class="account-portal">
+    <section class="account-form-pane">
+      <div class="account-form-inner">
+        <span class="portal-kicker">The Secretary™ // Account access</span>
+        <div class="alert error" data-auth-error hidden></div>
+        <div class="alert info" data-already-signed-in hidden>You are already signed in.</div>
+
+        <section data-auth-panel="login">
+          <h1>Welcome<br>back.</h1>
+          <p class="portal-intro">Log in to continue your conversations.</p>
+          <form class="portal-form" data-auth-action="login">
+            <label><span>Email or username</span><input name="identifier" autocomplete="username" required autofocus placeholder="Enter your email or username"></label>
+            <label><span>Password</span><input name="password" type="password" autocomplete="current-password" required placeholder="Enter your password"></label>
+            <div class="portal-help-row"><button type="button" data-show-panel="forgot-request">Forgot your password?</button></div>
+            <button class="portal-submit" type="submit"><span>Log in securely</span><b>→</b></button>
+          </form>
+          <a class="portal-switch-card" href="/register/"><span>Don’t have an account?</span><strong>Create your account →</strong></a>
+        </section>
+
+        <section data-auth-panel="forgot-request" hidden>
+          <h1>Reset<br>password.</h1>
+          <p class="portal-intro">We’ll email a six-digit verification code.</p>
+          <form class="portal-form" data-auth-action="forgot-request">
+            <label><span>Account email</span><input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label>
+            <input class="auth-honeypot" name="website" tabindex="-1" autocomplete="off">
+            <button class="portal-submit" type="submit"><span>Send reset code</span><b>→</b></button>
+          </form>
+          <button class="portal-back" type="button" data-show-panel="login">← Back to login</button>
+        </section>
+
+        <section data-auth-panel="forgot-code" hidden>
+          <h1>Check<br>your email.</h1>
+          <p class="portal-intro">Enter the code sent to <strong data-reset-email></strong>.</p>
+          <form class="portal-form" data-auth-action="forgot-code">
+            <label><span>Six-digit code</span><input class="portal-code-input" name="code" inputmode="numeric" autocomplete="one-time-code" required minlength="6" maxlength="6" data-code-input placeholder="000000"></label>
+            <input class="auth-honeypot" name="website" tabindex="-1" autocomplete="off">
+            <button class="portal-submit" type="submit"><span>Verify code</span><b>→</b></button>
+          </form>
+          <div class="portal-secondary-actions"><button type="button" data-resend-reset>Send another code</button><button type="button" data-show-panel="forgot-request">Change email</button></div>
+        </section>
+
+        <section data-auth-panel="forgot-password" hidden>
+          <h1>Choose a<br>new password.</h1>
+          <p class="portal-intro">Use 8–72 characters and enter it twice.</p>
+          <form class="portal-form" data-auth-action="forgot-password">
+            <label><span>New password</span><input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="72"></label>
+            <label><span>Confirm new password</span><input name="password_confirm" type="password" autocomplete="new-password" required minlength="8" maxlength="72"></label>
+            <input class="auth-honeypot" name="website" tabindex="-1" autocomplete="off">
+            <button class="portal-submit" type="submit"><span>Set new password</span><b>→</b></button>
+          </form>
+        </section>
+      </div>
+    </section>
+    <aside class="account-image-pane" aria-label="Red Dead Redemption landscape">
+      <div class="account-image-caption"><span>The Secretary™ // Secure access</span><h2>Your place in the conversation is waiting.</h2></div>
+    </aside>
+  </main>
+  <script type="module" src="/assets/auth.js?v=2.0.0"></script>
+</body>
+</html>

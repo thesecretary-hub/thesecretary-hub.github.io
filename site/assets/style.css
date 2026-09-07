@@ -125,3 +125,30 @@ body,.admin-body,.portal-auth-body{background:#000}body:before,body:after{displa
 .post-archive-card>img{aspect-ratio:1/1}
 .post-manage-grid article>img{width:120px;height:120px;min-height:0;aspect-ratio:1/1}
 @media(max-width:760px){.post-manage-grid article>img{width:95px;height:95px;min-height:0}}
+
+/* Verified-code account portal. */
+.portal-auth-body .account-portal{background:#050506}
+.portal-auth-body .account-form-pane{position:relative;z-index:2;overflow-y:auto}
+.portal-auth-body .account-image-pane{border-left:0;background-position:center;background-size:cover}
+.login-auth-body .account-image-pane{background-image:url('/assets/images/login-portal.png')}
+.register-auth-body .account-image-pane{background-image:url('/assets/images/register-portal.png')}
+.portal-auth-body .account-image-pane:before{background:linear-gradient(180deg,rgba(0,0,0,.03) 40%,rgba(0,0,0,.83) 100%),linear-gradient(90deg,rgba(5,5,6,.26),transparent 28%)}
+.portal-auth-body .account-image-caption:before{display:none}
+.portal-auth-body [data-auth-panel][hidden]{display:none!important}
+.portal-auth-body .portal-intro strong{color:#fff}
+.portal-help-row{display:flex;justify-content:flex-end;margin-top:-7px}
+.portal-help-row button,.portal-back,.portal-secondary-actions button{padding:0;border:0;background:transparent;color:#d8d8df;font:800 10px/1.3 Arial,sans-serif;cursor:pointer;text-decoration:underline;text-decoration-color:#555;text-underline-offset:4px}
+.portal-help-row button{color:#fff;font-size:12px;text-decoration-color:#888}
+.portal-help-row button:hover,.portal-back:hover,.portal-secondary-actions button:hover{color:#fff;text-decoration-color:#fff}
+.portal-switch-card{display:grid;gap:5px;margin-top:20px;padding:17px 18px;border:1px solid #34343d;border-radius:10px;background:#0d0d11;color:#fff;transition:border-color .18s,background .18s,transform .18s}
+.portal-switch-card span{color:#aaaab4;font-size:10px}
+.portal-switch-card strong{font-size:13px}
+.portal-switch-card:hover{border-color:#666674;background:#141419;transform:translateY(-1px)}
+.portal-back{display:inline-block;margin-top:22px}
+.portal-secondary-actions{display:flex;justify-content:space-between;gap:18px;margin-top:20px}
+.portal-code-input{font-size:27px!important;font-weight:800;letter-spacing:.35em;text-align:center}
+.portal-submit:disabled{cursor:wait;opacity:.62;transform:none}
+.portal-submit.is-loading span:after{display:inline-block;width:10px;height:10px;margin-left:9px;border:2px solid #777;border-top-color:#111;border-radius:50%;animation:portal-spin .7s linear infinite;content:''}
+.auth-honeypot{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
+@keyframes portal-spin{to{transform:rotate(360deg)}}
+@media(max-width:760px){.portal-auth-body .account-form-pane{overflow:visible}.portal-switch-card{margin-top:17px}.portal-secondary-actions{align-items:flex-start;flex-direction:column}}
