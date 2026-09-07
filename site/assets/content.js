@@ -50,6 +50,6 @@ try {
         {label:'Maintenance Scheduled',message:item.scheduledMessage || 'Maintenance is scheduled.',time:item.createdAt || item.startAt},
       ];
     }
-    root.innerHTML = `<main class="status-detail-page"><nav><a href="/status/">← Status</a></nav><article><header><h1>${esc(item.title)}</h1><p>${type === 'incident' ? 'Incident report for' : 'Maintenance report for'} ${esc(source)}</p></header><section class="status-detail-timeline">${rows.map(row => `<div class="status-detail-row"><h2>${esc(row.label)}</h2><div><p>${esc(row.message)}</p><time>Posted ${formatDate(row.time, {dateStyle:'medium',timeStyle:'short'})}</time></div></div>`).join('')}</section></article></main>`;
+    root.innerHTML = `<main class="status-detail-page ${type}-detail"><nav><a href="/status/">← Status</a></nav><article><header><h1>${esc(item.title)}</h1><p>${type === 'incident' ? 'Incident report for' : 'Maintenance report for'} ${esc(source)}</p></header><section class="status-detail-timeline">${rows.map(row => `<div class="status-detail-row"><h2>${esc(row.label)}</h2><div><p>${esc(row.message)}</p><time>Posted ${formatDate(row.time, {dateStyle:'medium',timeStyle:'short'})}</time></div></div>`).join('')}</section></article></main>`;
   }
 } catch (error) { root.innerHTML = `<main class="container page"><section class="not-found-panel"><span class="eyebrow">404</span><h1>Page unavailable</h1><p>${esc(error.message)}</p><a class="button primary" href="/">Return home</a></section></main>`; }

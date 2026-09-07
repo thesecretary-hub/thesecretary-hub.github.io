@@ -104,3 +104,13 @@ html,body,.hub-body,.public-shell-body,.recent-section,.updates-signup,.hub-foot
 .showcase-content{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;width:100%;min-height:660px!important;margin:0!important;padding:430px max(7vw,50px) 28px!important;background:transparent!important;align-content:start}
 .showcase .recent-section{position:relative;z-index:5;padding-top:55px;background:transparent}
 @media(max-width:640px){.showcase{margin-top:40px}.showcase-foreground{margin-top:-240px;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.1) 135px,rgba(0,0,0,.52) 245px,rgba(0,0,0,.82) 370px,#000 510px)}.showcase-content{min-height:535px!important;padding:330px 24px 24px!important}.showcase .recent-section{padding-top:30px}}
+
+/* One compact, pitch-black footer on every public page. */
+.hub-footer{min-height:0!important;padding:70px 5vw 42px!important;background:#000!important}
+.hub-footer .footer-top,.hub-footer .footer-bottom{width:100%;background:transparent!important}
+.hub-footer .footer-bottom{margin-top:28px!important;padding:0!important;border:0!important}
+.hub-footer .footer-social{gap:18px;min-width:0}
+.hub-footer .footer-social a{width:30px;height:30px;border:0;border-radius:0;background:transparent;color:#fff}
+.hub-footer .footer-social a:hover{background:transparent;color:#fff;transform:translateY(-2px)}
+.hub-footer .footer-social svg,.hub-footer .footer-social img{display:block;width:21px;height:21px;fill:currentColor;object-fit:contain}
+@media(max-width:640px){.hub-footer{padding:52px 24px 34px!important}.hub-footer .footer-top,.hub-footer .footer-bottom{align-items:flex-start;flex-direction:column;gap:24px}.hub-footer .footer-bottom{margin-top:24px!important}.hub-footer .footer-bottom p{order:3}.hub-footer .footer-social{justify-content:flex-start}}

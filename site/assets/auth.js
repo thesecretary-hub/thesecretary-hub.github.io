@@ -160,5 +160,5 @@ document.querySelectorAll('[data-code-input]').forEach(input => {
 });
 
 const { data: { user } } = supabase ? await supabase.auth.getUser() : {data:{user:null}};
-if (user) document.querySelector('[data-already-signed-in]')?.removeAttribute('hidden');
-showPanel(mode === 'register' ? 'register' : 'login');
+if (user) location.replace('/profile/');
+else showPanel(mode === 'register' ? 'register' : 'login');

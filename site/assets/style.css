@@ -152,3 +152,6 @@ body,.admin-body,.portal-auth-body{background:#000}body:before,body:after{displa
 .auth-honeypot{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
 @keyframes portal-spin{to{transform:rotate(360deg)}}
 @media(max-width:760px){.portal-auth-body .account-form-pane{overflow:visible}.portal-switch-card{margin-top:17px}.portal-secondary-actions{align-items:flex-start;flex-direction:column}}
+.portal-account-prompt{margin:18px 0 0;color:#aaaab4;font-size:12px;text-align:center}.portal-account-prompt a{color:#fff;font-weight:850;text-decoration:underline;text-decoration-color:#777;text-underline-offset:4px}.portal-account-prompt a:hover{color:#fff;text-decoration-color:#fff}
+.profile-form-actions{display:flex;align-items:center;gap:10px;margin-top:6px}.profile-form-actions .button{margin:0}
+.maintenance-archive .archive-hero h1,.archive-row.maintenance h2{color:#ff7a1a}
