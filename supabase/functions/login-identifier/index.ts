@@ -1,11 +1,23 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const cors = {
-  'Access-Control-Allow-Origin': 'https://hub.thesecretary.xyz',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const allowedOrigins = new Set([
+  'https://hub.thesecretary.xyz',
+  'https://the-secretary-status.github.io',
+  'https://thesecretary-hub.github.io',
+]);
+
+function corsHeaders(request: Request) {
+  const origin = request.headers.get('origin') || '';
+  return {
+    'Access-Control-Allow-Origin': allowedOrigins.has(origin) ? origin : 'https://hub.thesecretary.xyz',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
 
 Deno.serve(async (request) => {
+  const cors = corsHeaders(request);
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     const { identifier, password } = await request.json();

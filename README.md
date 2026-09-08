@@ -56,11 +56,13 @@ The account code is intentionally separate from the status monitor.
 
 ```text
 SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_LEGACY_SERVICE_ROLE_KEY
 OTP_PEPPER
 ```
 
 `OTP_PEPPER` must be a private random string of at least 24 characters. The service-role key and pepper must never be added to frontend files or Git.
+
+For `SUPABASE_LEGACY_SERVICE_ROLE_KEY`, use the legacy JWT-formatted `service_role` key (the long value beginning with `eyJ`), not a newer `sb_secret_` key. Supabase blocks `sb_secret_` keys when Google Apps Script's browser-like user agent calls the REST/Auth APIs. Keep this key only in Script Properties. The code still accepts the old `SUPABASE_SERVICE_ROLE_KEY` property name for compatibility.
 
 For a free sender isolated from a personal identity, create a dedicated Gmail account named **The Secretary™**, use the project logo as that account's profile picture, and create/deploy this Apps Script while signed into that account. `MailApp` sends from the Google account that owns and executes the deployment; no SMTP credentials or custom-domain mailbox are required.
 

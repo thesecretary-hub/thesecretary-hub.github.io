@@ -99,14 +99,12 @@ export async function openProfile(username, viewerProfile = null) {
   dialog.showModal();
   const { data: profile, error } = await supabase.from('profiles').select('*').eq('username', username).maybeSingle();
   if (error || !profile) return dialog.querySelector('.profile-dialog-shell').insertAdjacentHTML('beforeend', '<div class="profile-not-found"><h2>Profile unavailable</h2></div>');
-  const [{ data: topics = [] }, { data: comments = [] }, { data: replies = [] }] = await Promise.all([
+  const [{ data: topics = [] }, { data: replies = [] }] = await Promise.all([
     supabase.from('forum_topics').select('title,slug,created_at').eq('user_id', profile.id).order('created_at', { ascending: false }).limit(4),
-    supabase.from('post_comments').select('post_slug,created_at').eq('user_id', profile.id).eq('is_deleted', false).order('created_at', { ascending: false }).limit(4),
     supabase.from('forum_replies').select('topic_id,created_at').eq('user_id', profile.id).eq('is_deleted', false).order('created_at', { ascending: false }).limit(4),
   ]);
   const activity = [
     ...topics.map((item) => ({ at:item.created_at, text:`Started “${item.title}”`, href:`/topic/?slug=${encodeURIComponent(item.slug)}` })),
-    ...comments.map((item) => ({ at:item.created_at, text:'Commented on a system post', href:`/posts/${encodeURIComponent(item.post_slug)}` })),
     ...replies.map((item) => ({ at:item.created_at, text:'Replied to a forum discussion', href:'/forums/' })),
   ].sort((a,b) => new Date(b.at)-new Date(a.at)).slice(0,6);
   const banner = publicImage('profile-media', profile.banner_path);

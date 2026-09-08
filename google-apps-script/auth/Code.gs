@@ -262,8 +262,11 @@ function sendCodeEmail_(email, code, subject, message) {
 function requireSecrets_() {
   const props = PropertiesService.getScriptProperties();
   const url = String(props.getProperty('SUPABASE_URL') || '').replace(/\/$/, '');
-  const serviceRole = String(props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || '');
+  const serviceRole = String(props.getProperty('SUPABASE_LEGACY_SERVICE_ROLE_KEY') || props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || '');
   const pepper = String(props.getProperty('OTP_PEPPER') || '');
+  if (serviceRole.indexOf('sb_secret_') === 0) {
+    throw new Error('Replace the Apps Script service key with the legacy service_role JWT from Supabase API Keys. Google Apps Script uses a browser-like User-Agent, so Supabase rejects sb_secret_ keys.');
+  }
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url) || !serviceRole || pepper.length < 24) {
     throw new Error('Auth backend secrets are not configured.');
   }

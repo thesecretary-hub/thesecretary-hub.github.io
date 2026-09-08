@@ -73,7 +73,7 @@ function incidentDays(incidents = [], maintenance = []) {
 }
 
 function chartMarkup() {
-  return `<section class="metrics-section"><header><span>System metrics</span><nav aria-label="Response period"><button class="active" data-chart-range="day">Day</button><button data-chart-range="week">Week</button><button data-chart-range="month">Month</button></nav></header><div class="response-chart"><div class="response-chart-title"><h2>Response Time</h2><strong data-chart-latest>—</strong></div><svg data-response-chart viewBox="0 0 820 190" role="img" aria-label="Response time graph"></svg></div></section>`;
+  return `<section class="metrics-section"><header><span>System metrics</span><nav aria-label="Response period"><button class="active" data-chart-range="day">Day</button><button data-chart-range="week">Week</button><button data-chart-range="month">Month</button></nav></header><div class="response-chart"><div class="response-chart-title"><h2>Response Time</h2><strong data-chart-latest>—</strong></div><div class="response-chart-hover" data-chart-tooltip hidden></div><svg data-response-chart viewBox="0 0 820 190" role="img" aria-label="Response time graph"></svg></div></section>`;
 }
 
 function durationText(startValue, endValue) {
@@ -103,6 +103,8 @@ function smoothChartPath(series,x,y) {
 
 function drawChart(data, range = 'day') {
   const svg = root.querySelector('[data-response-chart]');
+  const tooltip = root.querySelector('[data-chart-tooltip]');
+  tooltip.hidden = true;
   const storedSeries = data.monitor?.response?.series;
   const source = (Array.isArray(storedSeries) ? storedSeries : storedSeries?.[range] || storedSeries?.month || storedSeries?.week || storedSeries?.day) || [];
   const hours = {day:24,week:24*7,month:24*30}[range] || 24;
@@ -124,7 +126,6 @@ function drawChart(data, range = 'day') {
   const dot = svg.querySelector('.chart-hover-dot');
   const halo = svg.querySelector('.chart-hover-halo');
   const guide = svg.querySelector('.chart-hover-guide');
-  const tooltip = root.querySelector('[data-status-tooltip]');
   svg.onpointermove = (event) => {
     const rect = svg.getBoundingClientRect();
     const svgX = (event.clientX - rect.left) / rect.width * 820;
@@ -139,12 +140,10 @@ function drawChart(data, range = 'day') {
     halo.setAttribute('cy', y(Number(point.responseMs)));
     guide.setAttribute('x1', x(index));
     guide.setAttribute('x2', x(index));
-    tooltip.innerHTML = `<span>${esc(formatDate(point.checkedAt, {dateStyle:'medium',timeStyle:'short'}))}</span><strong>${Math.round(point.responseMs)}ms</strong>`;
-    tooltip.classList.add('visible');
-    tooltip.style.left = `${event.clientX}px`;
-    tooltip.style.top = `${event.clientY - 14}px`;
+    tooltip.innerHTML = `<span>${esc(formatDate(point.checkedAt, {dateStyle:'medium',timeStyle:'short'}))}</span><i></i><strong>${Math.round(point.responseMs)} ms</strong>`;
+    tooltip.hidden = false;
   };
-  svg.onpointerleave = () => { dot.hidden = true; halo.hidden = true; guide.hidden = true; tooltip.classList.remove('visible'); };
+  svg.onpointerleave = () => { dot.hidden = true; halo.hidden = true; guide.hidden = true; tooltip.hidden = true; };
 }
 
 function render(data) {
@@ -162,8 +161,11 @@ function render(data) {
     if (!bar) { tooltip.classList.remove('visible'); return; }
     tooltip.innerHTML = historyTooltip(bar, data);
     tooltip.classList.add('visible');
-    tooltip.style.left = `${event.clientX}px`;
-    tooltip.style.top = `${event.clientY - 14}px`;
+    const barRect = bar.getBoundingClientRect();
+    const halfWidth = Math.max(145, tooltip.offsetWidth / 2);
+    const barCenter = barRect.left + barRect.width / 2;
+    tooltip.style.left = `${Math.max(halfWidth + 12, Math.min(innerWidth - halfWidth - 12, barCenter))}px`;
+    tooltip.style.top = `${barRect.bottom + 14}px`;
   });
   root.querySelector('.service-list').addEventListener('pointerleave', () => tooltip.classList.remove('visible'));
   const dialog = root.querySelector('[data-status-subscribe-dialog]');

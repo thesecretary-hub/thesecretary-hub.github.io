@@ -20,5 +20,4 @@ body.post-reading-mode:before,body.post-reading-mode:after{display:none}
 .post-story-body figure img,.post-story-body>img{display:block;width:100%;height:auto;border-radius:0}
 .post-story-body>img{position:relative;left:50%;width:min(1090px,calc(100vw - 48px));max-width:none;margin:72px 0;transform:translateX(-50%)}
 .post-story-body figcaption{margin-top:12px;color:#8e8e8e;font-size:12px;text-align:left}
-.post-story-page .comments-section{width:min(650px,calc(100% - 48px));margin:72px auto 0}
 @media(max-width:700px){.post-story-page{padding-top:72px}.post-story-hero{width:100%;aspect-ratio:16/9}.post-story-header{padding-top:52px}.post-story-header h1{margin-top:30px}.post-story-header time{margin-top:28px}.post-story-body{font-size:17px}.post-story-body figure,.post-story-body>img{width:100vw;margin-top:48px;margin-bottom:48px}}
