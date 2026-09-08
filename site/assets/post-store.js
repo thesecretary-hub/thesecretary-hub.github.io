@@ -59,6 +59,14 @@ export async function savePost(record) {
   return data;
 }
 
+export async function markPostNotified(id, channel, deliveredAt = new Date().toISOString()) {
+  const field = channel === 'discord' ? 'discord_notified_at' : channel === 'email' ? 'email_notified_at' : '';
+  if (!field) throw new Error('Unknown post notification channel.');
+  const { data, error } = await supabase.from('posts').update({ [field]: deliveredAt }).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
 export async function deletePost(id) {
   const { error } = await supabase.from('posts').delete().eq('id', id);
   if (error) throw error;

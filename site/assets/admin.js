@@ -1,7 +1,7 @@
 import { statusApi } from './api.js';
 import { currentAccount, supabase } from './supabase-client.js';
-import { esc, formatDate, showToast } from './layout.js';
-import { renderPostAdmin } from './post-admin.js';
+import { esc, formatDate, showToast } from './layout.js?v=3.0.0';
+import { renderPostAdmin } from './post-admin.js?v=1.1.0';
 
 const page=document.body.dataset.admin||'overview';
 const root=document.querySelector('[data-admin-root]');

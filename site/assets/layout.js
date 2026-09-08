@@ -64,6 +64,15 @@ export async function mountLayout(active = '') {
 }
 
 function bindLayout(profile) {
+  document.addEventListener('profile-updated', (event) => { if (profile && profile.id === event.detail.id) Object.assign(profile, event.detail); });
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-profile-user], [data-account-link]');
+    if (!trigger || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const username = trigger.dataset.profileUser || profile?.username;
+    if (!username) return;
+    event.preventDefault();
+    openProfile(username, profile, trigger).catch(() => showToast('Could not open profile. Please try again.', 'error'));
+  });
   const shell = document.querySelector('[data-hub-header]');
   const drawer = document.querySelector('[data-posts-drawer]');
   const toggle = document.querySelector('[data-posts-toggle]');
@@ -85,30 +94,8 @@ export function showToast(message, type = 'success', timeout = 5000) {
   window.setTimeout(() => toast.remove(), timeout);
 }
 
-export async function openProfile(username, viewerProfile = null) {
+export async function openProfile(username, viewerProfile = null, anchor = null) {
   if (!supabase) return showToast('Community database is not connected.', 'error');
-  let dialog = document.querySelector('[data-profile-dialog]');
-  if (!dialog) {
-    dialog = document.createElement('dialog');
-    dialog.className = 'profile-dialog';
-    dialog.dataset.profileDialog = '';
-    document.body.append(dialog);
-  }
-  dialog.innerHTML = '<div class="profile-dialog-shell"><button class="dialog-close profile-close" type="button">×</button><div class="profile-loading">Loading profile…</div></div>';
-  dialog.querySelector('.dialog-close').onclick = () => dialog.close();
-  dialog.showModal();
-  const { data: profile, error } = await supabase.from('profiles').select('*').eq('username', username).maybeSingle();
-  if (error || !profile) return dialog.querySelector('.profile-dialog-shell').insertAdjacentHTML('beforeend', '<div class="profile-not-found"><h2>Profile unavailable</h2></div>');
-  const [{ data: topics = [] }, { data: replies = [] }] = await Promise.all([
-    supabase.from('forum_topics').select('title,slug,created_at').eq('user_id', profile.id).order('created_at', { ascending: false }).limit(4),
-    supabase.from('forum_replies').select('topic_id,created_at').eq('user_id', profile.id).eq('is_deleted', false).order('created_at', { ascending: false }).limit(4),
-  ]);
-  const activity = [
-    ...topics.map((item) => ({ at:item.created_at, text:`Started “${item.title}”`, href:`/topic/?slug=${encodeURIComponent(item.slug)}` })),
-    ...replies.map((item) => ({ at:item.created_at, text:'Replied to a forum discussion', href:'/forums/' })),
-  ].sort((a,b) => new Date(b.at)-new Date(a.at)).slice(0,6);
-  const banner = publicImage('profile-media', profile.banner_path);
-  const own = viewerProfile?.id === profile.id;
-  dialog.innerHTML = `<div class="profile-dialog-shell"><button class="dialog-close profile-close" type="button">×</button><article class="profile-card effect-${esc(profile.profile_effect)}" style="--profile-primary:${esc(profile.accent_primary)};--profile-secondary:${esc(profile.accent_secondary)}"><div class="profile-banner" style="${banner ? `background-image:url('${banner}')` : ''};background-position:center ${Number(profile.banner_y)||50}%"></div><div class="profile-card-body"><span class="user-avatar avatar-profile" style="--avatar-scale:${Number(profile.avatar_scale)||1};--avatar-x:${Number(profile.avatar_x)||50}%;--avatar-y:${Number(profile.avatar_y)||50}%"><img src="${avatarUrl(profile)}" alt=""></span><h2>${esc(profile.display_name)}</h2><span>@${esc(profile.username)}</span><p>${esc(profile.bio || 'No bio yet.')}</p><small>Member since ${formatDate(profile.created_at, {dateStyle:'medium'})}</small>${own ? '<a class="button primary small" href="/profile/">Edit profile</a>' : ''}<section class="profile-activity"><strong>Activity</strong>${activity.length ? activity.map((item)=>`<a href="${item.href}"><span>${esc(item.text)}</span><small>${relativeTime(item.at)}</small></a>`).join('') : '<p>No public activity yet.</p>'}</section></div></article></div>`;
-  dialog.querySelector('.dialog-close').onclick = () => dialog.close();
+  const { showProfile } = await import('./profile-ui.js?v=1.0.0');
+  return showProfile(username, viewerProfile, anchor);
 }

@@ -123,6 +123,7 @@ body,.admin-body,.portal-auth-body{background:#000}body:before,body:after{displa
 .art-upload.poster img{width:min(260px,100%);aspect-ratio:1/1}
 .post-archive-card>img{aspect-ratio:1/1}
 .post-manage-grid article>img{width:120px;height:120px;min-height:0;aspect-ratio:1/1}
+.post-delivery-status{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.post-delivery-status span{padding:5px 8px;border:1px solid #303039;border-radius:999px;font-size:9px;font-weight:800}.post-delivery-status .sent{border-color:#1f643d;color:#59d98e}.post-delivery-status .missing{border-color:#785e19;color:#f0c849}.post-manage-grid article>div>.post-manage-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.post-manage-actions .button{font-size:9px}
 @media(max-width:760px){.post-manage-grid article>img{width:95px;height:95px;min-height:0}}
 
 /* Verified-code account portal. */

@@ -112,6 +112,7 @@ function route_(action, data, isPost) {
       case 'cancel_maintenance': result = concludeMaintenance_(data.id); break;
       case 'delete_maintenance': deleteRecord_('maintenance', data.id); result = {}; break;
       case 'create_post': result = createPost_(data); break;
+      case 'notify_post': result = notifyExternalPost_(data); break;
       case 'resend_post_discord': result = resendPostDiscord_(data.id); break;
       case 'resend_post_email': result = resendPostEmail_(data.id); break;
       case 'delete_post': result = deletePost_(data.id); break;
@@ -334,6 +335,29 @@ function createPost_(data) {
   const delivery = notifyEvent_('post', item, getSettings_());
   writeRecord_('posts', item);
   return {item: item, delivery: delivery};
+}
+
+// Post Studio stores editorial content in Supabase. This authenticated bridge
+// reuses the status service's private webhook and subscriber list.
+function notifyExternalPost_(data) {
+  const channel = String(data.channel || '').trim().toLowerCase();
+  if (channel !== 'discord' && channel !== 'email') throw new Error('Choose Discord or email delivery.');
+  const item = {
+    id: cleanText_(data.id, 80),
+    slug: normalizeSlug_(data.slug),
+    title: requiredText_(data.title, 180, 'Post title is required.'),
+    excerpt: cleanText_(data.excerpt, 500)
+  };
+  if (!item.slug) throw new Error('Post slug is required.');
+  return {
+    channel: channel,
+    deliveredAt: new Date().toISOString(),
+    delivery: notifyEvent_('post', item, getSettings_(), {
+      discord: channel === 'discord',
+      email: channel === 'email',
+      requireWebhook: channel === 'discord'
+    })
+  };
 }
 
 function resendPostDiscord_(id) {

@@ -1,5 +1,5 @@
 import { statusApi } from './api.js?v=6.5.0';
-import { esc, formatDate, mountLayout } from './layout.js';
+import { esc, formatDate, mountLayout } from './layout.js?v=3.0.0';
 
 const root = document.querySelector('[data-status-root]');
 document.body.classList.add('status-public-mode');

@@ -1,5 +1,6 @@
-import { deletePost, getAllPosts, savePost, uploadPostMedia } from './post-store.js';
-import { esc, formatDate, showToast } from './layout.js';
+import { statusApi } from './api.js';
+import { deletePost, getAllPosts, markPostNotified, savePost, uploadPostMedia } from './post-store.js?v=1.1.0';
+import { esc, formatDate, showToast } from './layout.js?v=3.0.0';
 
 const slugify = (value) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 190);
 const icon = (label, command, value = '') => `<button type="button" data-command="${command}" data-value="${value}" title="${label}">${label}</button>`;
@@ -26,7 +27,7 @@ async function render(root, editing = null) {
       <div class="post-feature-row"><label><input type="checkbox" name="is_hero" ${editing?.is_hero ? 'checked' : ''}> Feature in hero <small>Maximum 3; the oldest selection is removed automatically.</small></label><label><input type="checkbox" name="is_pinned" ${editing?.is_pinned ? 'checked' : ''}> Pin post <small>Maximum 6; the oldest selection is removed automatically.</small></label></div>
     </form>
   </section>
-  <section class="published-posts"><div class="panel-heading"><div><span class="eyebrow">Library</span><h2>All posts</h2></div><span>${posts.length} total</span></div><div class="post-manage-grid">${posts.map((post) => `<article><img src="${esc(post.poster_url)}" alt=""><div><span class="status-pill ${post.status === 'published' ? 'good' : 'unknown'}">${esc(post.status)}</span><h3>${esc(post.title)}</h3><small>${formatDate(post.updated_at)}</small><p>${post.is_hero ? 'Hero · ' : ''}${post.is_pinned ? 'Pinned' : ''}</p><div><button class="button small ghost" type="button" data-edit-post="${post.id}">Edit</button><button class="button small danger" type="button" data-delete-post="${post.id}">Delete</button></div></div></article>`).join('') || '<div class="empty-card">No Supabase posts yet.</div>'}</div></section>`;
+  <section class="published-posts"><div class="panel-heading"><div><span class="eyebrow">Library</span><h2>All posts</h2></div><span>${posts.length} total</span></div><div class="post-manage-grid">${posts.map(postCard).join('') || '<div class="empty-card">No Supabase posts yet.</div>'}</div></section>`;
   bind(root, posts);
 }
 
@@ -61,10 +62,39 @@ function bind(root, posts) {
       for (const file of form.elements.gallery.files) { const uploaded = await uploadPostMedia(file, `${folder}/gallery`); gallery.push(uploaded); added.push(uploaded); }
       const now = new Date().toISOString();
       const galleryHtml = added.map((item) => `<figure><img src="${item.url}" alt=""><figcaption></figcaption></figure>`).join('');
-      await savePost({ id: existing?.id, slug: folder, title: form.elements.title.value.trim(), excerpt: form.elements.excerpt.value.trim(), content_html: editor.innerHTML.trim() + galleryHtml, full_thumb_url: full.url, full_thumb_path: full.path, poster_url: poster.url, poster_path: poster.path, gallery, status: submitStatus, is_hero: form.elements.is_hero.checked, is_pinned: form.elements.is_pinned.checked, published_at: submitStatus === 'published' ? existing?.published_at || now : existing?.published_at || null });
-      showToast(submitStatus === 'published' ? 'Post published.' : 'Draft saved.'); await render(root);
+      const saved = await savePost({ id: existing?.id, slug: folder, title: form.elements.title.value.trim(), excerpt: form.elements.excerpt.value.trim(), content_html: editor.innerHTML.trim() + galleryHtml, full_thumb_url: full.url, full_thumb_path: full.path, poster_url: poster.url, poster_path: poster.path, gallery, status: submitStatus, is_hero: form.elements.is_hero.checked, is_pinned: form.elements.is_pinned.checked, published_at: submitStatus === 'published' ? existing?.published_at || now : existing?.published_at || null });
+      const firstPublish = submitStatus === 'published' && existing?.status !== 'published';
+      if (firstPublish) {
+        const results = await Promise.allSettled(['discord', 'email'].map((channel) => notifyPost(saved, channel)));
+        const failures = results.map((result, index) => result.status === 'rejected' ? `${index ? 'Email' : 'Discord'}: ${result.reason?.message || 'delivery failed'}` : '').filter(Boolean);
+        showToast(failures.length ? `Post published. ${failures.join(' · ')}` : 'Post published and sent to Discord and subscribers.', failures.length ? 'error' : undefined);
+      } else showToast(submitStatus === 'published' ? 'Post updated without sending duplicate notifications.' : 'Draft saved.');
+      await render(root);
     } catch (error) { showToast(error.message, 'error'); button.disabled = false; }
   });
   root.querySelectorAll('[data-edit-post]').forEach((button) => button.onclick = () => render(root, posts.find((post) => post.id === button.dataset.editPost)));
+  root.querySelectorAll('[data-notify-post]').forEach((button) => button.onclick = async () => {
+    const post = posts.find((item) => item.id === button.dataset.notifyPost);
+    if (!post) return;
+    button.disabled = true;
+    try {
+      await notifyPost(post, button.dataset.channel);
+      showToast(button.dataset.channel === 'discord' ? 'Post sent to Discord.' : 'Post emailed to subscribers.');
+      await render(root);
+    } catch (error) { showToast(error.message, 'error'); button.disabled = false; }
+  });
   root.querySelectorAll('[data-delete-post]').forEach((button) => button.onclick = async () => { if (!confirm('Delete this post permanently?')) return; try { await deletePost(button.dataset.deletePost); showToast('Post deleted.'); await render(root); } catch (error) { showToast(error.message, 'error'); } });
+}
+
+function postCard(post) {
+  const published = post.status === 'published';
+  const discordStatus = post.discord_notified_at ? `sent ${formatDate(post.discord_notified_at)}` : 'not sent';
+  const emailStatus = post.email_notified_at ? `sent ${formatDate(post.email_notified_at)}` : 'not sent';
+  return `<article><img src="${esc(post.poster_url)}" alt=""><div><span class="status-pill ${published ? 'good' : 'unknown'}">${esc(post.status)}</span><h3>${esc(post.title)}</h3><small>${formatDate(post.updated_at)}</small><p>${post.is_hero ? 'Hero · ' : ''}${post.is_pinned ? 'Pinned' : ''}</p>${published ? `<div class="post-delivery-status"><span class="${post.discord_notified_at ? 'sent' : 'missing'}">Discord ${discordStatus}</span><span class="${post.email_notified_at ? 'sent' : 'missing'}">Email ${emailStatus}</span></div>` : ''}<div class="post-manage-actions"><button class="button small ghost" type="button" data-edit-post="${post.id}">Edit</button>${published ? `<button class="button small ghost" type="button" data-notify-post="${post.id}" data-channel="discord">${post.discord_notified_at ? 'Send Discord again' : 'Send to Discord'}</button><button class="button small ghost" type="button" data-notify-post="${post.id}" data-channel="email">${post.email_notified_at ? 'Email again' : 'Email subscribers'}</button>` : ''}<button class="button small danger" type="button" data-delete-post="${post.id}">Delete</button></div></div></article>`;
+}
+
+async function notifyPost(post, channel) {
+  const result = await statusApi('notify_post', { channel, id: post.id, slug: post.slug, title: post.title, excerpt: post.excerpt });
+  await markPostNotified(post.id, channel, result.deliveredAt || new Date().toISOString());
+  return result;
 }
