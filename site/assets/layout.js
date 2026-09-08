@@ -96,6 +96,6 @@ export function showToast(message, type = 'success', timeout = 5000) {
 
 export async function openProfile(username, viewerProfile = null, anchor = null) {
   if (!supabase) return showToast('Community database is not connected.', 'error');
-  const { showProfile } = await import('./profile-ui.js?v=1.0.0');
+  const { showProfile } = await import('./profile-ui.js?v=1.1.0');
   return showProfile(username, viewerProfile, anchor);
 }
