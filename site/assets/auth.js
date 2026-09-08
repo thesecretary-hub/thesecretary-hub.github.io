@@ -42,7 +42,14 @@ async function signIn(identifier, password) {
     return;
   }
   const { data, error } = await client.functions.invoke('login-identifier', {body:{identifier,password}});
-  if (error || data?.error || !data?.session) throw new Error(data?.error || 'Login failed.');
+  if (error) {
+    let functionMessage = data?.error || '';
+    try {
+      if (!functionMessage && error.context instanceof Response) functionMessage = (await error.context.clone().json())?.error || '';
+    } catch (_) {}
+    throw new Error(functionMessage || error.message || 'Login failed.');
+  }
+  if (data?.error || !data?.session) throw new Error(data?.error || 'Login failed.');
   const { error: sessionError } = await client.auth.setSession({
     access_token:data.session.access_token,
     refresh_token:data.session.refresh_token,

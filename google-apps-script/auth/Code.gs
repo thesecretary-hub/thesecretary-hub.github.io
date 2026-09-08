@@ -9,7 +9,10 @@ const AUTH_CONFIG = {
 };
 
 function doGet() {
-  return json_({ok:true,service:'The Secretary account verification'});
+  const props = PropertiesService.getScriptProperties();
+  const serviceRole = String(props.getProperty('SUPABASE_LEGACY_SERVICE_ROLE_KEY') || props.getProperty('SUPABASE_SERVICE_ROLE_KEY') || '');
+  const keyMode = serviceRole.indexOf('eyJ') === 0 ? 'legacy-service-role-ready' : serviceRole.indexOf('sb_secret_') === 0 ? 'unsupported-sb-secret' : 'missing-or-invalid';
+  return json_({ok:true,service:'The Secretary account verification',version:'2026-09-08.2',keyMode:keyMode});
 }
 
 function doPost(e) {
@@ -266,6 +269,9 @@ function requireSecrets_() {
   const pepper = String(props.getProperty('OTP_PEPPER') || '');
   if (serviceRole.indexOf('sb_secret_') === 0) {
     throw new Error('Replace the Apps Script service key with the legacy service_role JWT from Supabase API Keys. Google Apps Script uses a browser-like User-Agent, so Supabase rejects sb_secret_ keys.');
+  }
+  if (serviceRole && serviceRole.indexOf('eyJ') !== 0) {
+    throw new Error('The configured service-role value is not the legacy JWT key. Copy the key value beginning with eyJ from Supabase Legacy API Keys, not its label or an sb_secret_ key.');
   }
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url) || !serviceRole || pepper.length < 24) {
     throw new Error('Auth backend secrets are not configured.');
