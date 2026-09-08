@@ -13,8 +13,9 @@
 .identity-compact .identity-card{border:0;border-radius:13px;box-shadow:none}
 .identity-compact .identity-banner{height:96px}
 .identity-compact .identity-body{padding:43px 15px 14px}
-.identity-compact .identity-avatar{top:-36px;left:15px;width:72px;height:72px;padding:0;border-width:4px;cursor:pointer;transition:transform .16s ease,filter .16s ease}
-.identity-compact .identity-avatar:hover{transform:translateY(-1px) scale(1.035);filter:brightness(1.08)}
+.identity-compact .identity-avatar{top:-36px;left:15px;width:72px;height:72px;padding:0;border-width:4px;cursor:pointer}
+.identity-compact .identity-avatar img{transition:filter .16s ease}
+.identity-compact .identity-avatar:hover img{filter:brightness(.7)}
 .identity-compact .identity-emblem{top:12px;right:16px;font-size:17px}
 .identity-compact .identity-body h2{margin-bottom:3px;font-size:18px;letter-spacing:-.35px}
 .identity-compact .identity-handle{margin-bottom:12px;font-size:10px}
@@ -39,3 +40,6 @@
 .identity-full .identity-tabs{margin-bottom:30px}
 .identity-full .identity-member-tile{margin-top:22px}
 @media(max-width:720px){.identity-full-grid{grid-template-columns:1fr;min-height:0;padding:14px;gap:16px}.identity-full-banner{height:220px}.identity-compact{width:280px}.identity-full .identity-board{padding-bottom:42px}}
+.identity-scroll-lock{overflow:hidden!important;overscroll-behavior:none}
+.identity-compact::backdrop{background:transparent;backdrop-filter:none}
+.identity-full::backdrop{background:rgba(0,0,0,.64);backdrop-filter:none}
