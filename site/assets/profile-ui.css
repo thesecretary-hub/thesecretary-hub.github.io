@@ -57,6 +57,23 @@
 .identity-activity-intro{display:flex;flex-direction:column;gap:3px;margin:-7px 0 15px;color:#a9a9b4}.identity-activity-intro small{color:#ddd;font-size:10px}.identity-activity-intro span{font-size:9px}
 .identity-activities{gap:8px}.identity-activities a{min-height:66px;gap:6px;padding:12px 42px 12px 14px;border:0;border-radius:10px;background:#ffffff0a}.identity-activities a:hover{background:#ffffff10}.identity-activities small{font-size:9px}.identity-activities strong{font-size:12px}.identity-activities a>span{top:10px;right:12px;color:#a9a9b5;font-size:12px;letter-spacing:1px}
 
+/* Selected profile colors drive every surface, including readable light themes. */
+.identity-card{background:linear-gradient(180deg,var(--identity-top),var(--identity-bottom));color:var(--identity-text);border-color:var(--identity-line)}
+.identity-full-grid{background:var(--identity-surface);color:var(--identity-text)}
+.identity-card .identity-avatar{border-color:var(--identity-top);background:var(--identity-top)}
+.identity-card .identity-body h2,.identity-board h2,.identity-card .identity-bio,.identity-board .identity-about-copy{color:var(--identity-text)}
+.identity-card .identity-handle,.identity-card .identity-meta h3,.identity-card .identity-meta p,.identity-card .identity-compact-logout,.identity-card .identity-preview-label,.identity-board .identity-kicker,.identity-board .identity-empty p,.identity-board .identity-activity-intro,.identity-board .identity-activities small{color:var(--identity-muted)}
+.identity-card .identity-meta,.identity-card .identity-preview-label,.identity-board .identity-tabs{border-color:var(--identity-line)}
+.identity-card .identity-role,.identity-card .identity-secondary,.identity-board .identity-activities a{color:var(--identity-text);border-color:var(--identity-line);background:var(--identity-control)}
+.identity-board .identity-tabs button{color:var(--identity-muted)}
+.identity-board .identity-tabs button[aria-pressed=true]{color:var(--identity-text);border-bottom-color:var(--identity-text)}
+.identity-card .identity-bio a,.identity-board .identity-about-copy a{color:var(--identity-link)}
+.identity-card .identity-bio a:hover,.identity-board .identity-about-copy a:hover{color:var(--identity-link)}
+.identity-card .identity-bio blockquote,.identity-board .identity-about-copy blockquote{color:var(--identity-text);border-color:var(--identity-muted)}
+.identity-board .identity-activities strong,.identity-board .identity-activity-intro small,.identity-board .identity-activities a>span{color:var(--identity-text)}
+.identity-card .identity-bio code,.identity-board .identity-about-copy code{background:var(--identity-control)}
+.identity-full-banner img{opacity:.08}
+
 /* Calm defaults, avatar-bound placement and lightweight loading motion. */
 .identity-card.identity-no-banner .identity-banner{background:var(--identity-secondary,#101013)}
 .identity-dialog{animation:none;opacity:0;transition:opacity .16s ease,transform .2s cubic-bezier(.2,.8,.2,1)}
