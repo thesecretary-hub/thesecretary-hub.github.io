@@ -59,7 +59,7 @@
 
 /* Selected profile colors drive every surface, including readable light themes. */
 .identity-card{background:linear-gradient(180deg,var(--identity-top),var(--identity-bottom));color:var(--identity-text);border-color:var(--identity-line)}
-.identity-full-grid{background:var(--identity-surface);color:var(--identity-text)}
+.identity-full-grid{background:radial-gradient(circle at 72% 18%,color-mix(in srgb,var(--identity-primary) 14%,transparent),transparent 46%),linear-gradient(145deg,var(--identity-surface),color-mix(in srgb,var(--identity-surface) 88%,var(--identity-secondary)));color:var(--identity-text)}
 .identity-card .identity-avatar{border-color:var(--identity-top);background:var(--identity-top)}
 .identity-card .identity-body h2,.identity-board h2,.identity-card .identity-bio,.identity-board .identity-about-copy{color:var(--identity-text)}
 .identity-card .identity-handle,.identity-card .identity-meta h3,.identity-card .identity-meta p,.identity-card .identity-compact-logout,.identity-card .identity-preview-label,.identity-board .identity-kicker,.identity-board .identity-empty p,.identity-board .identity-activity-intro,.identity-board .identity-activities small{color:var(--identity-muted)}
@@ -72,7 +72,9 @@
 .identity-card .identity-bio blockquote,.identity-board .identity-about-copy blockquote{color:var(--identity-text);border-color:var(--identity-muted)}
 .identity-board .identity-activities strong,.identity-board .identity-activity-intro small,.identity-board .identity-activities a>span{color:var(--identity-text)}
 .identity-card .identity-bio code,.identity-board .identity-about-copy code{background:var(--identity-control)}
-.identity-full-banner img{opacity:.08}
+.identity-full-banner img{height:100%;opacity:.1;object-fit:cover;mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.62) 48%,rgba(0,0,0,.14));-webkit-mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.62) 48%,rgba(0,0,0,.14))}
+.identity-customize{display:inline-flex;align-items:center;justify-content:center;width:auto;margin:-5px 0 15px;padding:7px 12px;border:0;border-radius:6px;background:#f2dc19;color:#17170b;font-size:10px!important;font-weight:800;box-shadow:0 2px 9px #0002;transition:filter .15s,transform .15s}
+.identity-customize:hover{filter:brightness(1.08);transform:translateY(-1px)}
 
 /* Calm defaults, avatar-bound placement and lightweight loading motion. */
 .identity-card.identity-no-banner .identity-banner{background:var(--identity-secondary,#101013)}

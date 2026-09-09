@@ -1,4 +1,4 @@
-import { mountLayout } from './layout.js?v=4.2.0';
+import { mountLayout } from './layout.js?v=4.3.0';
 import { FALLBACK_POST, getPublishedPosts, postDate, postHref } from './post-store.js';
 
 await mountLayout('hub');
