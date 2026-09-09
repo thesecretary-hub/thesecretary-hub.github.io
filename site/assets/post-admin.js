@@ -1,6 +1,6 @@
 import { statusApi } from './api.js';
 import { deletePost, getAllPosts, markPostNotified, savePost, uploadPostMedia } from './post-store.js?v=1.1.0';
-import { esc, formatDate, showToast } from './layout.js?v=3.8.0';
+import { esc, formatDate, showToast } from './layout.js?v=3.9.0';
 
 const slugify = (value) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 190);
 const icon = (label, command, value = '') => `<button type="button" data-command="${command}" data-value="${value}" title="${label}">${label}</button>`;
