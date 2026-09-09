@@ -1,5 +1,5 @@
 import { supabase, publicImage } from './supabase-client.js';
-import { esc, formatDate, relativeTime, showToast } from './layout.js?v=3.7.0';
+import { esc, formatDate, relativeTime, showToast } from './layout.js?v=3.8.0';
 const effects=['none','aurora','nebula','ember','ocean'];
 const presets=[['Midnight','#5865f2','#181929'],['Rosewater','#f2a6c5','#674681'],['Tidal','#35c9c4','#17406c'],['Ember','#f3a258','#632847'],['Forest','#8aba83','#233f39'],['Monochrome','#777777','#202024']];
 const color=(v,f)=>/^#[\da-f]{6}$/i.test(v||'')?v:f;
@@ -11,7 +11,7 @@ function setScrollLock(locked){document.documentElement.classList.toggle('identi
 function markdownInline(value){const links=[];let text=String(value||'').replace(/(?:https?:\/\/|www\.)[^\s<>"']+/gi,url=>{let tail='';while(/[),.!?;:]$/.test(url)){tail=url.slice(-1)+tail;url=url.slice(0,-1);}const href=/^www\./i.test(url)?`https://${url}`:url,token=`\uE000${links.length}\uE001`;links.push(`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>`);return token+tail;});text=esc(text).replace(/`([^`\n]+)`/g,'<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>').replace(/__([^_\n]+)__/g,'<u>$1</u>').replace(/~~([^~\n]+)~~/g,'<s>$1</s>').replace(/\*([^*\n]+)\*/g,'<em>$1</em>').replace(/_([^_\n]+)_/g,'<em>$1</em>').replace(/\|\|([^|\n]+)\|\|/g,'<span class="identity-spoiler" tabindex="0">$1</span>');return text.replace(/\uE000(\d+)\uE001/g,(_,i)=>links[Number(i)]||'');}
 function bioHtml(value,fallback='A little mystery looks good on you.'){return String(value||fallback).split(/\r?\n/).map(line=>/^\s*>/.test(line)?`<blockquote>${markdownInline(line.replace(/^\s*>\s?/,''))}</blockquote>`:markdownInline(line)).join('<br>');}
 async function logout(){const {error}=await supabase.auth.signOut();if(error)return showToast(error.message,'error');location.href='/';}
-function assets(){if(!document.querySelector('[data-profile-styles]')){const l=document.createElement('link');l.rel='stylesheet';l.href='/assets/profile-ui.css?v=1.7.0';l.dataset.profileStyles='';document.head.append(l);}}
+function assets(){if(!document.querySelector('[data-profile-styles]')){const l=document.createElement('link');l.rel='stylesheet';l.href='/assets/profile-ui.css?v=1.8.0';l.dataset.profileStyles='';document.head.append(l);}}
 export function profileCard(p,action='',avatarOpens=false,handleAction=''){
  const banner=p.bannerPreview||publicImage('profile-media',p.banner_path),avatar=p.avatarPreview||publicImage('profile-media',p.avatar_path)||'/assets/images/default-profile-avatar.png';
  const role={admin:'Administrator',moderator:'Moderator',user:'Community member'}[p.role]||'Community member';
