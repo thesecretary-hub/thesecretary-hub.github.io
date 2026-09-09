@@ -6,7 +6,7 @@ const esc = (value = '') => String(value).replace(/[&<>'"]/g, (c) => ({'&':'&amp
 export { esc };
 
 export function avatarUrl(profile) {
-  return publicImage('profile-media', profile?.avatar_path) || '/assets/images/favicon.png';
+  return publicImage('profile-media', profile?.avatar_path) || '/assets/images/default-profile-avatar.png';
 }
 
 export function formatDate(value, options = { dateStyle: 'medium', timeStyle: 'short' }) {
@@ -96,6 +96,6 @@ export function showToast(message, type = 'success', timeout = 5000) {
 
 export async function openProfile(username, viewerProfile = null, anchor = null) {
   if (!supabase) return showToast('Community database is not connected.', 'error');
-  const { showProfile } = await import('./profile-ui.js?v=1.3.0');
+  const { showProfile } = await import('./profile-ui.js?v=1.5.0');
   return showProfile(username, viewerProfile, anchor);
 }

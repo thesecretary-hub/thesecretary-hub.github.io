@@ -1,6 +1,6 @@
 import { authApi } from './auth-api.js';
 import { requireSupabase, supabase } from './supabase-client.js';
-import { mountLayout, showToast } from './layout.js?v=3.3.0';
+import { mountLayout, showToast } from './layout.js?v=3.5.0';
 
 await mountLayout('');
 
