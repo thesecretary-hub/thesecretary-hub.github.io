@@ -1,6 +1,6 @@
 import { statusApi } from './api.js';
 import { currentAccount, supabase } from './supabase-client.js';
-import { esc, formatDate, showToast } from './layout.js?v=3.5.0';
+import { esc, formatDate, showToast } from './layout.js?v=3.7.0';
 import { renderPostAdmin } from './post-admin.js?v=1.1.0';
 
 const page=document.body.dataset.admin||'overview';

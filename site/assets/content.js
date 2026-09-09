@@ -1,5 +1,5 @@
 import { statusApi } from './api.js';
-import { esc, formatDate, mountLayout } from './layout.js?v=3.5.0';
+import { esc, formatDate, mountLayout } from './layout.js?v=3.7.0';
 import { getPostBySlug, safeRichHtml } from './post-store.js';
 
 const root = document.querySelector('[data-content-root]');

@@ -1,5 +1,5 @@
 import { currentAccount, requireSupabase, supabase } from './supabase-client.js';
-import { avatarUrl, esc, mountLayout, relativeTime, showToast } from './layout.js?v=3.5.0';
+import { avatarUrl, esc, mountLayout, relativeTime, showToast } from './layout.js?v=3.7.0';
 
 const categories = {
   suggestion: ['Suggestion','Ideas that could improve The Secretary.','#a78bfa'],

@@ -1,5 +1,5 @@
-import { mountLayout, esc } from './layout.js?v=3.5.0';
-import { showFullProfile, editProfile } from './profile-ui.js?v=1.5.0';
+import { mountLayout, esc } from './layout.js?v=3.7.0';
+import { showFullProfile, editProfile } from './profile-ui.js?v=1.7.0';
 const profile=await mountLayout('');
 const root=document.querySelector('[data-profile-editor-root]');
 if(!profile)location.replace('/login/?return=/profile/');
