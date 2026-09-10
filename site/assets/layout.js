@@ -39,7 +39,27 @@ function footer() {
 
 function ensureHubAssets() {
   if (!document.querySelector('link[href*="hub.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="/assets/hub.css?v=2.1.0">');
+  ensureProfileStyles();
   if (!document.querySelector('link[href*="Bowlby+One+SC"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC:wght@400&amp;display=swap" rel="stylesheet">');
+}
+
+let profileStylesPromise;
+function ensureProfileStyles() {
+  if (profileStylesPromise) return profileStylesPromise;
+  let link = document.querySelector('link[data-profile-styles],link[href*="profile-ui.css"]');
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/assets/profile-ui.css?v=2.8.0';
+    link.dataset.profileStyles = '';
+    document.head.append(link);
+  }
+  if (link.sheet) return profileStylesPromise = Promise.resolve();
+  profileStylesPromise = new Promise((resolve) => {
+    link.addEventListener('load', resolve, { once: true });
+    link.addEventListener('error', resolve, { once: true });
+  });
+  return profileStylesPromise;
 }
 
 function renderDrawerPosts(posts) {
@@ -96,6 +116,7 @@ export function showToast(message, type = 'success', timeout = 5000) {
 
 export async function openProfile(username, viewerProfile = null, anchor = null) {
   if (!supabase) return showToast('Community database is not connected.', 'error');
-  const { showProfile } = await import('./profile-ui.js?v=2.7.0');
+  await ensureProfileStyles();
+  const { showProfile } = await import('./profile-ui.js?v=2.8.0');
   return showProfile(username, viewerProfile, anchor);
 }
