@@ -42,7 +42,7 @@
 .identity-full .identity-tabs{margin-bottom:30px}
 .identity-full .identity-member-tile{margin-top:22px}
 @media(max-width:720px){.identity-full{width:calc(100vw - 8px);height:auto;max-width:calc(100vw - 8px)}.identity-full>[data-content]{height:auto}.identity-full-grid{grid-template-columns:1fr;height:auto;min-height:0;padding:14px 14px 0;gap:16px}.identity-full .identity-card{border-radius:13px 13px 0 0}.identity-full-banner{height:220px}.identity-compact{width:280px}.identity-full .identity-board{padding-bottom:42px}}
-.identity-scroll-lock{overscroll-behavior:none}.identity-dialog{overscroll-behavior:contain}
+html.identity-scroll-lock,body.identity-scroll-lock{overflow-x:hidden!important;overscroll-behavior:none}.identity-dialog{overscroll-behavior:contain}
 .identity-compact::backdrop{background:transparent;backdrop-filter:none}
 .identity-full::backdrop{background:rgba(0,0,0,.64);backdrop-filter:none}
 

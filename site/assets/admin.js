@@ -1,6 +1,6 @@
 import { statusApi } from './api.js';
 import { currentAccount, supabase } from './supabase-client.js';
-import { esc, formatDate, showToast } from './layout.js?v=4.4.0';
+import { esc, formatDate, showToast } from './layout.js?v=4.5.0';
 import { renderPostAdmin } from './post-admin.js?v=1.1.0';
 
 const page=document.body.dataset.admin||'overview';
@@ -19,7 +19,7 @@ async function bootstrap(){try{
 }}
 
 async function load(){
-  root.innerHTML=`${nav()}<main class="container wide admin-page"><div class="admin-intro"><h1>Loading control room…</h1></div></main>`;
+  root.innerHTML=`${nav()}<main class="site-page-loader" aria-live="polite"><span></span><p>Loading control room…</p></main>`;
   document.querySelector('[data-admin-logout]').onclick=async()=>{await supabase.auth.signOut();location.href='/';};
   if(page==='posts'){await renderPostAdmin(root,nav);document.querySelector('[data-admin-logout]').onclick=async()=>{await supabase.auth.signOut();location.href='/';};return;}
   try{const data=await statusApi('admin_status');render(data);bind(data);}catch(error){root.querySelector('main').innerHTML=`<div class="flash error"><strong>Admin backend unavailable.</strong> ${esc(error.message)}</div>`;}

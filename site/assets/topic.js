@@ -1,5 +1,5 @@
 import { currentAccount, requireSupabase, supabase } from './supabase-client.js';
-import { avatarUrl, esc, formatDate, mountLayout, showToast } from './layout.js?v=4.4.0';
+import { avatarUrl, esc, formatDate, mountLayout, showToast } from './layout.js?v=4.5.0';
 
 const categories={suggestion:['Suggestion','#a78bfa'],bugs:['Bug & Glitches','#f59e0b'],'website-error':['Website Error','#22c55e'],'fatal-error':['Fatal Error','#ef4444'],downtime:['Downtime Discussion','#38bdf8']};
 const root=document.querySelector('[data-topic-root]');

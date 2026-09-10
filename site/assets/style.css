@@ -155,3 +155,5 @@ body,.admin-body,.portal-auth-body{background:#000}body:before,body:after{displa
 .portal-account-prompt{margin:18px 0 0;color:#aaaab4;font-size:12px;text-align:center}.portal-account-prompt a{color:#fff;font-weight:850;text-decoration:underline;text-decoration-color:#777;text-underline-offset:4px}.portal-account-prompt a:hover{color:#fff;text-decoration-color:#fff}
 .profile-form-actions{display:flex;align-items:center;gap:10px;margin-top:6px}.profile-form-actions .button{margin:0}
 .maintenance-archive .archive-hero h1,.archive-row.maintenance h2{color:#ff7a1a}
+/* Shared first-paint loader for data-driven pages. */
+.site-page-loader{display:grid;place-content:center;justify-items:center;gap:16px;min-height:78vh;background:#000;color:#999}.site-page-loader span{width:34px;height:34px;border:3px solid #282828;border-top-color:#fff;border-radius:50%;animation:site-page-spin .75s linear infinite}.site-page-loader p{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase}@keyframes site-page-spin{to{transform:rotate(360deg)}}

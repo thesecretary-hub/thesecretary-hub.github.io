@@ -1,5 +1,5 @@
 import { statusApi } from './api.js';
-import { esc, formatDate, mountLayout } from './layout.js?v=4.4.0';
+import { esc, formatDate, mountLayout } from './layout.js?v=4.5.0';
 import { FALLBACK_POST, getPublishedPosts, postHref } from './post-store.js';
 
 const root = document.querySelector('[data-archive-root]');
