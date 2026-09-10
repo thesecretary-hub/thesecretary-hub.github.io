@@ -105,3 +105,18 @@ html.identity-scroll-lock,body.identity-scroll-lock{overflow-x:hidden!important;
 .identity-media-layer{animation:identity-layer-in .16s ease-out both}.identity-media-layer>.identity-media-picker,.identity-media-layer>.identity-crop-dialog{animation:identity-overlay-in .2s cubic-bezier(.2,.8,.2,1) both}.identity-media-layer.identity-layer-closing{pointer-events:none;animation:identity-layer-out .16s ease-in both}.identity-media-layer.identity-layer-closing>.identity-media-picker,.identity-media-layer.identity-layer-closing>.identity-crop-dialog{animation:identity-overlay-out .16s ease-in both}
 @keyframes identity-layer-in{from{opacity:0}to{opacity:1}}@keyframes identity-layer-out{from{opacity:1}to{opacity:0}}@keyframes identity-overlay-in{from{opacity:0;transform:translateY(7px) scale(.975)}to{opacity:1;transform:none}}@keyframes identity-overlay-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(5px) scale(.982)}}
 @media(prefers-reduced-motion:reduce){.identity-media-layer,.identity-media-layer>*{animation:none!important;transition:none!important}}
+
+/* Chirping (beta): 5s of layered silhouettes, then 5s of untouched profile.
+   The shared parent gates staggered flights, so delays never eat into the buffer. */
+.identity-chirping-flock{position:absolute;inset:0;z-index:4;overflow:hidden;border-radius:inherit;pointer-events:none;contain:paint;animation:identity-chirping-cycle 10s linear infinite}
+.identity-chirping-flock::before{content:"";position:absolute;inset:0;background:linear-gradient(155deg,#bfc1c32e,#11121b18 55%,#0003);animation:identity-chirping-haze 10s linear infinite}
+.identity-chirping-flight{position:absolute;inset:0;opacity:0;animation:identity-chirping-flight 10s linear var(--bird-lag) infinite}
+.identity-chirping-flight svg{position:absolute;left:var(--bird-x);top:var(--bird-y);width:var(--bird-size);height:auto;overflow:visible;fill:#080910;filter:blur(var(--bird-blur)) drop-shadow(0 3px 3px #08091066);transform:translate(-50%,-50%) rotate(var(--bird-bank))}
+.identity-chirping-wing{transform-box:view-box;transform-origin:60px 55px;animation:identity-chirping-flap var(--bird-flap) ease-in-out infinite alternate}
+.identity-chirping-wing-right{animation-delay:-.12s}
+@keyframes identity-chirping-cycle{0%,49.999%{visibility:visible}50%,100%{visibility:hidden}}
+@keyframes identity-chirping-haze{0%,50%,100%{opacity:0}9%,34%{opacity:1}49%{opacity:0}}
+@keyframes identity-chirping-flight{0%{opacity:0;transform:translate(-35%,65%) scale(.65)}3%{opacity:.85}12%{opacity:1;transform:translate(4%,8%) scale(1)}21%{opacity:.95;transform:translate(-8%,-48%) scale(1.18)}30%,100%{opacity:0;transform:translate(22%,-150%) scale(.8)}}
+@keyframes identity-chirping-flap{0%{transform:scaleY(1) rotate(-7deg)}100%{transform:scaleY(-.38) rotate(8deg)}}
+.identity-effects input[value="chirping"]+span{text-transform:none}
+@media(prefers-reduced-motion:reduce){.identity-chirping-flock{display:none}.identity-chirping-flock *{animation:none!important}}
