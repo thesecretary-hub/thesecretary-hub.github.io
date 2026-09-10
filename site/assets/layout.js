@@ -100,10 +100,13 @@ function bindLayout(profile) {
   let drawerOpen = false;
   let lastY = scrollY;
   const setDrawer = (open) => { drawerOpen = open; shell.classList.toggle('drawer-open', open); toggle.setAttribute('aria-expanded', String(open)); drawer.setAttribute('aria-hidden', String(!open)); };
-  toggle.addEventListener('click', () => setDrawer(!drawerOpen));
+  toggle.addEventListener('click', () => {
+    if (matchMedia('(max-width: 960px)').matches) { location.href = '/posts/'; return; }
+    setDrawer(!drawerOpen);
+  });
   document.querySelector('[data-hub-menu]')?.addEventListener('click', (event) => { const open = shell.classList.toggle('mobile-open'); event.currentTarget.setAttribute('aria-expanded', String(open)); });
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setDrawer(false); });
-  addEventListener('scroll', () => { const y = Math.max(0, scrollY); shell.classList.toggle('scrolled', y > 10); if (!drawerOpen && y > 110 && y > lastY + 5) shell.classList.add('hidden'); if (y < lastY - 2 || y < 50) shell.classList.remove('hidden'); lastY = y; }, { passive: true });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { setDrawer(false); shell.classList.remove('mobile-open'); document.querySelector('[data-hub-menu]')?.setAttribute('aria-expanded', 'false'); } });
+  addEventListener('scroll', () => { const y = Math.max(0, scrollY); shell.classList.toggle('scrolled', y > 10); if (!drawerOpen && !shell.classList.contains('mobile-open') && y > 110 && y > lastY + 5) shell.classList.add('hidden'); if (y < lastY - 2 || y < 50) shell.classList.remove('hidden'); lastY = y; }, { passive: true });
 }
 
 export function showToast(message, type = 'success', timeout = 5000) {

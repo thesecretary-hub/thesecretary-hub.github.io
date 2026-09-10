@@ -63,13 +63,26 @@ async function init() {
   const videoToggle = document.querySelector('[data-showcase-toggle]');
   let showcaseVisible = false;
   let manuallyPaused = false;
+  const simpleMotion = matchMedia('(max-width: 960px), (prefers-reduced-motion: reduce)');
   const syncShowcaseVideo = () => {
-    const shouldPlay = showcaseVisible && !manuallyPaused;
+    const shouldPlay = !simpleMotion.matches && showcaseVisible && !manuallyPaused;
     if (shouldPlay) video.play().catch(() => {}); else video.pause();
     videoToggle.classList.toggle('paused', !shouldPlay);
     videoToggle.setAttribute('aria-pressed', String(!shouldPlay));
     videoToggle.setAttribute('aria-label', shouldPlay ? 'Pause background video' : 'Play background video');
   };
+  const syncMedia = () => {
+    [video, document.querySelector('[data-scroll-story-video]')].forEach(media => {
+      const source = media.querySelector('source');
+      if (simpleMotion.matches) {
+        media.pause();
+        if (source.hasAttribute('src')) { source.dataset.src = source.getAttribute('src'); source.removeAttribute('src'); media.load(); }
+      } else if (!source.hasAttribute('src')) { source.src = source.dataset.src; media.load(); }
+    });
+    syncShowcaseVideo();
+  };
+  simpleMotion.addEventListener('change', syncMedia);
+  syncMedia();
   video.addEventListener('canplay', () => document.querySelector('.showcase-media').classList.add('video-ready'));
   video.addEventListener('error', () => video.hidden = true, true);
   videoToggle.addEventListener('click', () => { manuallyPaused = !video.paused; syncShowcaseVideo(); });
@@ -89,6 +102,7 @@ async function init() {
   storyVideo.addEventListener('error', () => story.classList.add('video-error'), true);
   const updateStory = () => {
     storyFrame = 0;
+    if (simpleMotion.matches) return;
     const rect = story.getBoundingClientRect();
     const travel = Math.max(1, story.offsetHeight - innerHeight);
     const progress = Math.min(1, Math.max(0, -rect.top / travel));
@@ -120,7 +134,7 @@ async function init() {
     else if (event.key === 'End') seekStory(1);
     else seekStory(current + (event.key === 'ArrowDown' ? .08 : -.08));
   });
-  const queueStoryUpdate = () => { if (!storyFrame) storyFrame = requestAnimationFrame(updateStory); };
+  const queueStoryUpdate = () => { if (!simpleMotion.matches && !storyFrame) storyFrame = requestAnimationFrame(updateStory); };
   addEventListener('scroll', queueStoryUpdate, { passive: true });
   addEventListener('resize', queueStoryUpdate, { passive: true });
   updateStory();

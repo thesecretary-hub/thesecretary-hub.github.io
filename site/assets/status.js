@@ -1,6 +1,11 @@
 import { statusApi } from './api.js?v=6.5.0';
 import { esc, formatDate, mountLayout } from './layout.js?v=4.5.0';
 
+const mobileHistory = matchMedia('(max-width: 700px)');
+const historyDays = () => mobileHistory.matches ? 30 : 90;
+let refreshHistory = () => {};
+mobileHistory.addEventListener('change', () => refreshHistory());
+
 const root = document.querySelector('[data-status-root]');
 document.body.classList.add('status-public-mode');
 
@@ -36,8 +41,8 @@ function eventsForServiceDay(kind, date, events = []) {
 }
 
 function serviceHistory(service, monitor, events = []) {
-  return Array.from({length: 90}, (_, index) => {
-    const date = statusDateAtOffset(89 - index);
+  return Array.from({length: historyDays()}, (_, index) => {
+    const date = statusDateAtOffset(historyDays() - 1 - index);
     let state = 'operational';
     let uptimeValue = 100;
     if(service.kind !== 'server'){
@@ -47,15 +52,16 @@ function serviceHistory(service, monitor, events = []) {
       if(incident){state=incident.impact==='critical'||incident.impact==='major'?'outage':'degraded';uptimeValue=null;}
       else if(maintenance){state='degraded';uptimeValue=null;}
     }
-    if (index === 89 && service.state !== 'operational') state = service.state;
+    if (index === historyDays() - 1 && service.state !== 'operational') state = service.state;
     const value = uptimeValue === null || uptimeValue === undefined ? stateLabel(state) : `${Number(uptimeValue).toFixed(3)}%`;
     return `<i class="${stateClass(state)}" data-history-kind="${service.kind}" data-history-day="${dayKey(date)}" data-history-date="${esc(formatDate(date, {dateStyle:'long'}))}" data-history-value="${esc(value)}"></i>`;
   }).join('');
 }
 
 function serviceRow(service, monitor, events) {
+  const uptime = service.kind === 'website' ? monitor.uptime?.[String(historyDays())] : service.uptime;
   const detail = service.offlineUntil ? ` until ${formatDate(service.offlineUntil, {dateStyle:'medium',timeStyle:'short'})}` : '';
-  return `<article class="status-service"><div class="status-service-head"><h2>${esc(service.name)}</h2><span class="${stateClass(service.state)}">${esc(service.label || stateLabel(service.state))}${esc(detail)}</span></div><div class="status-history" aria-label="90-day status history">${serviceHistory(service, monitor, events)}</div><div class="status-history-foot"><span>90 days ago</span><b></b><span>${service.kind === 'server' ? '100.0% uptime' : service.uptime === null || service.uptime === undefined ? 'No outages recorded' : `${Number(service.uptime).toFixed(2)}% uptime`}</span><b></b><span>Today</span></div></article>`;
+  return `<article class="status-service"><div class="status-service-head"><h2>${esc(service.name)}</h2><span class="${stateClass(service.state)}">${esc(service.label || stateLabel(service.state))}${esc(detail)}</span></div><div class="status-history" aria-label="${historyDays()}-day status history">${serviceHistory(service, monitor, events)}</div><div class="status-history-foot"><span>${mobileHistory.matches ? "30 days" : "90 days ago"}</span><b></b><span>${service.kind === 'server' ? '100.0% uptime' : uptime === null || uptime === undefined ? (mobileHistory.matches ? 'Uptime unavailable' : 'No outages recorded') : `${Number(uptime).toFixed(2)}% uptime`}</span><b></b><span>Today</span></div></article>`;
 }
 
 function incidentDays(incidents = [], maintenance = []) {
@@ -105,6 +111,10 @@ function drawChart(data, range = 'day') {
   const svg = root.querySelector('[data-response-chart]');
   const tooltip = root.querySelector('[data-chart-tooltip]');
   tooltip.hidden = true;
+  const chartWidth = mobileHistory.matches ? 360 : 820;
+  const chartRight = chartWidth - 70;
+  const plotWidth = chartRight - 20;
+  svg.setAttribute('viewBox', `0 0 ${chartWidth} 190`);
   const storedSeries = data.monitor?.response?.series;
   const source = (Array.isArray(storedSeries) ? storedSeries : storedSeries?.[range] || storedSeries?.month || storedSeries?.week || storedSeries?.day) || [];
   const hours = {day:24,week:24*7,month:24*30}[range] || 24;
@@ -113,23 +123,23 @@ function drawChart(data, range = 'day') {
   const series = source.filter(item => new Date(item.checkedAt).getTime() >= cutoff);
   const latest = series[series.length - 1];
   root.querySelector('[data-chart-latest]').textContent = latest ? `${Math.round(latest.responseMs)} ms` : 'No data';
-  if (!series.length) { svg.innerHTML = '<text x="410" y="100" text-anchor="middle">Response samples will appear after scheduled checks run.</text>'; return; }
+  if (!series.length) { svg.innerHTML = mobileHistory.matches ? '<text x="180" y="90" text-anchor="middle"><tspan x="180">Response samples will appear</tspan><tspan x="180" dy="18">after scheduled checks run.</tspan></text>' : '<text x="410" y="100" text-anchor="middle">Response samples will appear after scheduled checks run.</text>'; return; }
   const values = series.map((item) => Number(item.responseMs));
   const low = Math.max(0, Math.floor(Math.min(...values) / 50) * 50 - 50);
   const high = Math.max(low + 100, Math.ceil(Math.max(...values) / 50) * 50 + 50);
-  const x = (index) => 20 + index / Math.max(1, series.length - 1) * 730;
+  const x = (index) => 20 + index / Math.max(1, series.length - 1) * plotWidth;
   const y = (value) => 155 - (value - low) / (high - low) * 120;
   const path = smoothChartPath(series,x,y);
-  const lines = [0,.33,.66,1].map((part) => { const py=35+part*120; const label=Math.round(high-part*(high-low)); return `<line x1="20" y1="${py}" x2="750" y2="${py}"/><text x="765" y="${py+4}">${label}</text>`; }).join('');
+  const lines = [0,.33,.66,1].map((part) => { const py=35+part*120; const label=Math.round(high-part*(high-low)); return `<line x1="20" y1="${py}" x2="${chartRight}" y2="${py}"/><text x="${chartRight + 15}" y="${py+4}">${label}</text>`; }).join('');
   const label = (item) => new Intl.DateTimeFormat(undefined, range === 'day' ? {hour:'2-digit',minute:'2-digit'} : {month:'short',day:'numeric'}).format(new Date(item.checkedAt));
-  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" pathLength="1" d="${path}"/><line class="chart-hover-guide" y1="35" y2="155" hidden/><circle class="chart-hover-halo" r="11" hidden/><circle class="chart-hover-dot" r="5" hidden/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="385" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="750" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
+  svg.innerHTML = `<g class="chart-grid">${lines}</g><path class="chart-line" pathLength="1" d="${path}"/><line class="chart-hover-guide" y1="35" y2="155" hidden/><circle class="chart-hover-halo" r="11" hidden/><circle class="chart-hover-dot" r="5" hidden/><g class="chart-labels"><text x="20" y="180">${esc(label(series[0]))}</text><text x="${20 + plotWidth / 2}" y="180" text-anchor="middle">${esc(label(series[Math.floor(series.length/2)]))}</text><text x="${chartRight}" y="180" text-anchor="end">${esc(label(latest))}</text></g>`;
   const dot = svg.querySelector('.chart-hover-dot');
   const halo = svg.querySelector('.chart-hover-halo');
   const guide = svg.querySelector('.chart-hover-guide');
   svg.onpointermove = (event) => {
     const rect = svg.getBoundingClientRect();
-    const svgX = (event.clientX - rect.left) / rect.width * 820;
-    const index = Math.max(0, Math.min(series.length - 1, Math.round((svgX - 20) / 730 * (series.length - 1))));
+    const svgX = (event.clientX - rect.left) / rect.width * chartWidth;
+    const index = Math.max(0, Math.min(series.length - 1, Math.round((svgX - 20) / plotWidth * (series.length - 1))));
     const point = series[index];
     dot.hidden = false;
     halo.hidden = false;
@@ -153,8 +163,14 @@ function render(data) {
   const overall = services.some((item) => stateClass(item.state) === 'outage') ? 'outage' : services.some((item) => stateClass(item.state) === 'degraded') ? 'degraded' : 'operational';
   (data.incidents||[]).forEach(item=>sessionStorage.setItem(`status-record:incident:${item.slug}`,JSON.stringify(item)));
   (data.maintenance||[]).forEach(item=>sessionStorage.setItem(`status-record:maintenance:${item.slug}`,JSON.stringify(item)));
-  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past 90 days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor, data.historyEvents||[])).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><div class="status-tooltip" data-status-tooltip></div><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
+  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past ${historyDays()} days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor, data.historyEvents||[])).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><div class="status-tooltip" data-status-tooltip></div><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
   root.querySelectorAll('[data-chart-range]').forEach((button) => button.addEventListener('click', () => { root.querySelectorAll('[data-chart-range]').forEach((item) => item.classList.toggle('active', item === button)); drawChart(data, button.dataset.chartRange); }));
+  refreshHistory = () => {
+    root.querySelector('.uptime-caption').textContent = `Uptime over the past ${historyDays()} days.`;
+    root.querySelector('.service-list').innerHTML = services.map(service => serviceRow(service, monitor, data.historyEvents || [])).join('');
+    root.querySelector('[data-status-tooltip]').classList.remove('visible');
+    drawChart(data, root.querySelector('[data-chart-range].active')?.dataset.chartRange || 'day');
+  };
   const tooltip = root.querySelector('[data-status-tooltip]');
   root.querySelector('.service-list').addEventListener('pointermove', (event) => {
     const bar = event.target.closest('[data-history-date]');
