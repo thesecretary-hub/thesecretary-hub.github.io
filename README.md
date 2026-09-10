@@ -72,6 +72,25 @@ For a free sender isolated from a personal identity, create a dedicated Gmail ac
 
 Registration now emails a six-digit code from the dedicated Gmail account under the sender name **The Secretary™** before creating the Supabase user. Password reset uses the same branded sender and an emailed code followed by a short-lived reset ticket. Passwords are never stored in Apps Script Properties.
 
+### Forum revamp migration
+
+Before deploying the revamped forum pages, run `supabase/migrations/0009_forum_revamp.sql`
+in the Supabase SQL Editor. This migration preserves existing discussions, replies,
+and historical votes. Reply voting is disabled; only original posts accept votes.
+
+The new forum pages require this migration's `forum_topic_summary` view,
+`record_forum_view` RPC, and `set_forum_vote` RPC. Deploy the frontend after the
+migration succeeds. Views count at most once per topic per browser or authenticated
+account in 24 hours; they are deduplicated visits, not verified unique people.
+Previously inflated totals are retained because the old counter stored no visit
+history from which to reconstruct accurate totals. Views no longer bump topic
+activity; new replies do.
+
+After deployment, verify a signed-in member can reply to another member's open
+topic, cannot reply to a closed topic, can toggle/switch a topic vote, and sees no
+reply voting controls. Refreshing the same topic within 24 hours must not add
+another view. Anonymous users can browse and search but must sign in to participate.
+
 ## 2. Create the administrator account
 
 1. Register normally at `/register/` using `dikshitaggarwal007@gmail.com`.

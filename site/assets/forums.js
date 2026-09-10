@@ -1,66 +1,70 @@
-import { currentAccount, requireSupabase, supabase } from './supabase-client.js';
-import { avatarUrl, esc, mountLayout, relativeTime, showToast } from './layout.js?v=4.5.0';
+import { supabase } from './supabase-client.js';
+import { avatarUrl, esc, mountLayout, relativeTime } from './layout.js?v=4.5.0';
 
 const categories = {
-  suggestion: ['Suggestion','Ideas that could improve The Secretary.','#a78bfa'],
-  bugs: ['Bug & Glitches','Unexpected behaviour and reproducible bugs.','#f59e0b'],
-  'website-error': ['Website Error','Problems with the website or dashboard.','#22c55e'],
-  'fatal-error': ['Fatal Error','Critical failures requiring attention.','#ef4444'],
-  downtime: ['Downtime Discussion','Discuss current and previous disruptions.','#38bdf8'],
+  suggestion: ['Suggestions', 'Ideas for what comes next.', '#a78bfa'],
+  bugs: ['Bugs & glitches', 'Report a problem. Find a fix.', '#f59e0b'],
+  'website-error': ['Website help', 'Help with the Hub and dashboard.', '#22c55e'],
+  'fatal-error': ['Critical issues', 'Serious failures that need attention.', '#ef4444'],
+  downtime: ['Downtime', 'Talk about service disruptions.', '#38bdf8'],
 };
 const root = document.querySelector('[data-forums-root]');
-const profile = await mountLayout('forums');
-const query = new URLSearchParams(location.search);
-const category = categories[query.get('category')] ? query.get('category') : '';
-const sort = ['newest','votes'].includes(query.get('sort')) ? query.get('sort') : 'activity';
-
-async function loadTopics() {
-  if (!supabase) throw new Error('Community setup is waiting for the Supabase Project URL.');
-  let request = supabase.from('forum_topics').select('*, profiles!forum_topics_user_id_fkey(display_name,username,avatar_path)');
-  if (category) request = request.eq('category', category);
-  request = request.order(sort === 'newest' ? 'created_at' : 'updated_at', { ascending: false }).limit(100);
-  const { data: topics, error } = await request;
-  if (error) throw error;
-  const ids = topics.map((topic) => topic.id);
-  const [{ data: replies }, { data: votes }] = ids.length ? await Promise.all([
-    supabase.from('forum_replies').select('topic_id').in('topic_id', ids),
-    supabase.from('forum_topic_votes').select('topic_id,vote').in('topic_id', ids),
-  ]) : [{data:[]},{data:[]}];
-  topics.forEach((topic) => {
-    topic.reply_count = replies.filter((reply) => reply.topic_id === topic.id).length;
-    topic.vote_score = votes.filter((vote) => vote.topic_id === topic.id).reduce((sum, vote) => sum + vote.vote, 0);
-  });
-  if (sort === 'votes') topics.sort((a,b) => b.vote_score-a.vote_score || new Date(b.updated_at)-new Date(a.updated_at));
-  return topics;
+const viewer = await mountLayout('forums');
+const params = new URLSearchParams(location.search);
+const category = categories[params.get('category')] ? params.get('category') : '';
+const sort = ['newest', 'votes'].includes(params.get('sort')) ? params.get('sort') : 'activity';
+const status = ['open', 'solved', 'closed', 'unanswered'].includes(params.get('status')) ? params.get('status') : '';
+const search = (params.get('q') || '').slice(0, 120);
+const page = Math.max(1, Math.min(100000, Number.parseInt(params.get('page'), 10) || 1));
+const pageSize = 20;
+function url(changes = {}) {
+  const next = new URLSearchParams(params);
+  next.delete('page');
+  for (const [key, value] of Object.entries(changes)) value ? next.set(key, value) : next.delete(key);
+  return `/forums/?${next}`;
 }
-
-function topicRow(topic) {
-  const info = categories[topic.category] || ['Discussion','', '#888'];
-  return `<article class="forum-topic-row"><div class="forum-topic-primary"><button class="avatar-button" data-profile-user="${esc(topic.profiles.username)}"><span class="user-avatar avatar-medium"><img src="${avatarUrl(topic.profiles)}" alt=""></span></button><div><div class="forum-topic-title-line">${topic.status === 'solved' ? '<span class="topic-state solved">✓ Solved</span>' : topic.status === 'closed' ? '<span class="topic-state closed">Closed</span>' : ''}<a href="/topic/?slug=${encodeURIComponent(topic.slug)}">${esc(topic.title)}</a></div><p>${esc(topic.body.slice(0,180))}${topic.body.length > 180 ? '…' : ''}</p><span class="forum-topic-category" style="--category-color:${info[2]}">${info[0]} · by @${esc(topic.profiles.username)}</span></div></div><strong class="forum-stat">${topic.vote_score}</strong><strong class="forum-stat">${topic.reply_count}</strong><time>${relativeTime(topic.updated_at)}</time></article>`;
+function row(topic) {
+  const info = categories[topic.category];
+  return `<article class="discussion-row"><div class="discussion-identity"><button class="avatar-button" data-profile-user="${esc(topic.username)}" aria-label="View ${esc(topic.username)}'s profile"><span class="user-avatar avatar-medium"><img src="${avatarUrl(topic)}" alt=""></span></button><div><div class="discussion-tags"><a style="--category-color:${info[2]}" href="${url({category:topic.category})}">${info[0]}</a>${topic.status !== 'open' ? `<span class="state-${topic.status}">${topic.status}</span>` : ''}</div><h2><a href="/topic/?slug=${encodeURIComponent(topic.slug)}">${esc(topic.title)}</a></h2><p>${esc(topic.body.slice(0, 150))}${topic.body.length > 150 ? '…' : ''}</p><small>@${esc(topic.username)} · started ${relativeTime(topic.created_at)}</small></div></div><div class="discussion-number"><strong>${topic.vote_score}</strong><span>votes</span></div><div class="discussion-number"><strong>${topic.reply_count}</strong><span>replies</span></div><div class="discussion-number"><strong>${topic.views}</strong><span>views</span></div><div class="discussion-activity"><time datetime="${esc(topic.updated_at)}">${relativeTime(topic.updated_at)}</time><span>last activity</span></div></article>`;
 }
-
 async function render() {
   try {
-    const topics = await loadTopics();
-    root.innerHTML = `<main class="container page forum-page"><section class="forum-hero"><div><span class="eyebrow">The Secretary community</span><h1>Forums</h1><p>Report what broke, suggest what comes next, and help each other understand what is happening.</p></div>${profile ? '<button class="button primary" type="button" data-open-topic>Start a discussion</button>' : '<a class="button primary" href="/login/?return=/forums/">Log in to post</a>'}</section><div class="forum-layout"><aside class="forum-sidebar"><a class="forum-side-main ${!category ? 'active' : ''}" href="/forums/"><span>◈</span><strong>All discussions</strong><small>${topics.length} shown</small></a><div class="forum-side-title">Categories</div>${Object.entries(categories).map(([key, info]) => `<a class="forum-category-link ${category===key?'active':''}" href="?category=${key}"><span style="--category-color:${info[2]}"></span><div><strong>${info[0]}</strong><small>${info[1]}</small></div></a>`).join('')}<div class="forum-guidance"><strong>Before posting</strong><p>Never post passwords, API keys, or private data.</p></div></aside><section class="forum-feed"><header class="forum-feed-head"><div><strong>${category ? categories[category][0] : 'Latest discussions'}</strong><span>${topics.length} topics</span></div><nav><a class="${sort==='activity'?'active':''}" href="?${category?`category=${category}&`:''}sort=activity">Activity</a><a class="${sort==='newest'?'active':''}" href="?${category?`category=${category}&`:''}sort=newest">Newest</a><a class="${sort==='votes'?'active':''}" href="?${category?`category=${category}&`:''}sort=votes">Top</a></nav></header><div class="forum-topic-columns"><span>Topic</span><span>Votes</span><span>Replies</span><span>Activity</span></div><div class="forum-topic-list">${topics.length ? topics.map(topicRow).join('') : '<div class="community-empty"><span>◇</span><p>No discussions here yet.</p></div>'}</div></section></div></main>`;
-    bindComposer();
-  } catch (error) { root.innerHTML = `<main class="container page"><div class="flash error">${esc(error.message)}</div></main>`; }
+    if (!supabase) throw new Error('Community connection is not configured.');
+    let request = supabase.from('forum_topic_summary').select('*', {count:'exact'});
+    if (category) request = request.eq('category', category);
+    if (status === 'unanswered') request = request.eq('reply_count', 0).eq('status', 'open');
+    else if (status) request = request.eq('status', status);
+    if (search.trim()) request = request.ilike('title', `%${search.trim().replace(/[%_\\]/g, '\\$&')}%`);
+    const {data, count, error} = await request.order(sort === 'votes' ? 'vote_score' : sort === 'newest' ? 'created_at' : 'updated_at', {ascending:false}).order('id', {ascending:false}).range((page-1)*pageSize, page*pageSize-1);
+    if (error) throw error;
+    root.innerHTML = `<main class="container page forum-page forum-v2"><section class="forum-hero"><div><span class="eyebrow">COMMUNITY / THE SECRETARY</span><h1>A place to talk.</h1><p>Share an idea, work through a problem, or join the conversation.</p></div>${viewer ? '<button class="button primary" data-open-topic>＋ New discussion</button>' : '<a class="button primary" href="/login/?return=/forums/">Log in to start a topic</a>'}</section><div class="forum-layout"><aside class="forum-sidebar"><a class="forum-side-main ${!category?'active':''}" href="${url({category:''})}"><strong>All discussions</strong><span>↗</span></a><div class="forum-side-title">Browse categories</div>${Object.entries(categories).map(([key, info])=>`<a class="forum-category-link ${key===category?'active':''}" href="${url({category:key})}"><span style="--category-color:${info[2]}"></span><div><strong>${info[0]}</strong><small>${info[1]}</small></div></a>`).join('')}<div class="forum-guidance"><strong>Make it a useful conversation.</strong><p>Use a clear title. For bugs, include steps to reproduce and what you expected to happen.</p><p>Keep private information out of public posts.</p></div></aside><section class="forum-feed"><form class="forum-search" action="/forums/">${category?`<input type="hidden" name="category" value="${category}">`:''}<input type="hidden" name="sort" value="${sort}"><input type="hidden" name="status" value="${status}"><label for="forum-search">Search discussions</label><div><input id="forum-search" name="q" type="search" maxlength="120" value="${esc(search)}" placeholder="Find a discussion by title…"><button class="button ghost">Search</button></div></form><header class="forum-feed-head"><div><strong>${category?categories[category][0]:'All discussions'}</strong><span>${count} ${count===1?'topic':'topics'}</span></div><nav aria-label="Sort discussions">${[['activity','Latest activity'],['newest','Newest'],['votes','Top voted']].map(([key,label])=>`<a class="${sort===key?'active':''}" href="${url({sort:key})}">${label}</a>`).join('')}</nav></header><nav class="forum-filters" aria-label="Discussion status">${[['','All'],['unanswered','Unanswered'],['open','Open'],['solved','Solved'],['closed','Closed']].map(([key,label])=>`<a class="${status===key?'active':''}" href="${url({status:key})}">${label}</a>`).join('')}</nav><div class="discussion-list">${data.length?data.map(row).join(''):'<div class="community-empty"><h2>No discussions found.</h2><p>Try another search or start a new conversation.</p><a href="/forums/">Clear filters</a></div>'}</div><footer class="forum-pagination">${page>1?`<a class="button ghost" href="${url({page:String(page-1)})}">← Previous</a>`:'<span></span>'}<span>Page ${page} of ${Math.max(1,Math.ceil(count/pageSize))}</span>${page*pageSize<count?`<a class="button ghost" href="${url({page:String(page+1)})}">Next →</a>`:'<span></span>'}</footer></section></div></main>`;
+    root.querySelector('[data-open-topic]')?.addEventListener('click', compose);
+  } catch (error) {
+    root.innerHTML = `<main class="container page"><h1>Forums could not load</h1><p>${esc(error.message)}</p><button class="button primary" data-retry>Try again</button></main>`;
+    root.querySelector('[data-retry]').onclick = render;
+  }
 }
-
-function bindComposer() {
-  document.querySelector('[data-open-topic]')?.addEventListener('click', () => {
-    const dialog = document.createElement('dialog');
-    dialog.className = 'topic-dialog';
-    dialog.innerHTML = `<form class="topic-form"><header><div><span class="eyebrow">New discussion</span><h2>Start with useful details.</h2></div><button class="dialog-close" type="button">×</button></header><label>Category<select name="category" required>${Object.entries(categories).map(([key,info])=>`<option value="${key}" ${category===key?'selected':''}>${info[0]}</option>`).join('')}</select></label><label>Title<input name="title" required minlength="6" maxlength="160"></label><label>Details<textarea name="body" required minlength="10" maxlength="20000" rows="10"></textarea></label><div class="topic-form-note">Public discussion · do not include credentials.</div><button class="button primary" type="submit">Publish discussion</button></form>`;
-    document.body.append(dialog); dialog.showModal();
-    dialog.querySelector('.dialog-close').onclick=()=>dialog.close();
-    dialog.querySelector('form').onsubmit=async(event)=>{
-      event.preventDefault(); const values=Object.fromEntries(new FormData(event.currentTarget));
-      const slug=`${values.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,170)}-${Math.random().toString(36).slice(2,7)}`;
-      const { data, error }=await requireSupabase().from('forum_topics').insert({user_id:profile.id,category:values.category,title:values.title.trim(),body:values.body.trim(),slug}).select().single();
-      if(error)return showToast(error.message,'error'); location.href=`/topic/?slug=${encodeURIComponent(data.slug)}`;
-    };
-  });
+function compose() {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'topic-dialog';
+  dialog.setAttribute('aria-labelledby', 'composer-title');
+  dialog.innerHTML = `<form class="topic-form"><header><div><span class="eyebrow">New discussion</span><h2 id="composer-title">Start a conversation.</h2></div><button class="dialog-close" type="button" aria-label="Close">×</button></header><label>Category<select name="category">${Object.entries(categories).map(([key,info])=>`<option value="${key}" ${category===key?'selected':''}>${info[0]}</option>`).join('')}</select></label><label>Title<input name="title" required minlength="6" maxlength="160" placeholder="What would you like to discuss?"></label><label>Your post<textarea name="body" required minlength="10" maxlength="20000" rows="10" placeholder="Include the context others will need to help."></textarea></label><p role="alert" data-form-error></p><button class="button primary" type="submit">Publish discussion</button></form>`;
+  document.body.append(dialog);
+  dialog.showModal();
+  dialog.querySelector('.dialog-close').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+  dialog.querySelector('form').onsubmit=async event=>{
+    event.preventDefault();
+    const form=event.currentTarget, button=form.querySelector('[type=submit]');
+    const values=Object.fromEntries(new FormData(form));
+    if(values.title.trim().length<6 || values.body.trim().length<10) { form.querySelector('[data-form-error]').textContent='Use at least 6 characters for the title and 10 for the post.'; return; }
+    button.disabled=true;
+    try {
+      const slug=`${values.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,145)||'discussion'}-${crypto.randomUUID()}`;
+      const {data,error}=await supabase.from('forum_topics').insert({user_id:viewer.id,category:values.category,title:values.title.trim(),body:values.body.trim(),slug}).select('slug').single();
+      if(error) throw error;
+      location.href=`/topic/?slug=${encodeURIComponent(data.slug)}`;
+    } catch(error) { form.querySelector('[data-form-error]').textContent=error.message; button.disabled=false; }
+  };
 }
-
 render();
