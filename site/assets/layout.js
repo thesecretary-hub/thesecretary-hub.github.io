@@ -99,6 +99,7 @@ function bindLayout(profile) {
   if (!shell || !drawer || !toggle) return;
   let drawerOpen = false;
   let lastY = scrollY;
+  shell.classList.toggle('scrolled', scrollY > 10);
   const setDrawer = (open) => { drawerOpen = open; shell.classList.toggle('drawer-open', open); toggle.setAttribute('aria-expanded', String(open)); drawer.setAttribute('aria-hidden', String(!open)); };
   toggle.addEventListener('click', () => {
     if (matchMedia('(max-width: 960px)').matches) { location.href = '/posts/'; return; }

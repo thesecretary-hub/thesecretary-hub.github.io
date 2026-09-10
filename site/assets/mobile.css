@@ -88,3 +88,31 @@
   body .hero-copy { right: 24px; max-width: none; grid-template-columns: 110px minmax(0,1fr); }
   body .hero-poster-logo { width: 110px; height: 110px; }
 }
+/* Center the mobile homepage and shared menus, keeping desktop composition intact. */
+@media (max-width: 960px) {
+  body .hub-header { background: transparent; backdrop-filter: none; }
+  body .hub-header.scrolled { background: rgba(0,0,0,.78); backdrop-filter: blur(18px); }
+  body .hub-header.mobile-open { background: rgba(0,0,0,.78); backdrop-filter: blur(18px); }
+  body .hub-nav { align-items: center; text-align: center; background: rgba(0,0,0,.88); }
+  body .hub-nav-link { justify-content: center; }
+  body.hub-body main { text-align: center; }
+  body .hero-copy { text-align: center; }
+  body .hero-copy-text h1 { margin-inline: auto; }
+  body .hero-controls { right: auto; left: 50%; width: max-content; max-width: 100%; transform: translateX(-50%); }
+  body .section-title { flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  body .pinned-copy { align-items: center; text-align: center; }
+  body .showcase-content { grid-template-columns: minmax(0,1fr); justify-items: center; }
+  body .showcase-content > div { max-width: 650px; }
+  body .showcase-buttons { justify-content: center; }
+  body .scroll-story-copy { align-items: center; text-align: center; }
+  body .updates-signup { justify-items: center; text-align: center; }
+  body .updates-copy p { margin-inline: auto; }
+  body .hub-footer .footer-top, body .hub-footer .footer-bottom { flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  body .hub-footer nav { justify-content: center; }
+  body .hub-footer .footer-social { justify-content: center; }
+  body .hub-footer .footer-bottom p { max-width: 100%; text-align: center; }
+}
+@media (max-width: 640px) {
+  body .hub-hero { padding-top: 0; }
+  body .hero-poster-logo { margin-inline: auto; }
+}
