@@ -106,24 +106,29 @@ html.identity-scroll-lock,body.identity-scroll-lock{overflow-x:hidden!important;
 @keyframes identity-layer-in{from{opacity:0}to{opacity:1}}@keyframes identity-layer-out{from{opacity:1}to{opacity:0}}@keyframes identity-overlay-in{from{opacity:0;transform:translateY(7px) scale(.975)}to{opacity:1;transform:none}}@keyframes identity-overlay-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(5px) scale(.982)}}
 @media(prefers-reduced-motion:reduce){.identity-media-layer,.identity-media-layer>*{animation:none!important;transition:none!important}}
 
-/* Chirping (beta): 5s of layered silhouettes, then 5s of untouched profile.
-   The shared parent gates staggered flights, so delays never eat into the buffer. */
+
+/* Chirping (beta): a neutral scene ABOVE every profile surface.
+   All scene elements share a 10s clock: 5s scene, then 5s entirely clear. */
 .identity-chirping-flock{position:absolute;inset:0;z-index:4;overflow:hidden;border-radius:inherit;pointer-events:none;contain:paint;animation:identity-chirping-cycle 10s linear infinite}
-/* Fixed neutral sky composited ABOVE the banner, avatar and profile body.
-   Its palette never reads profile theme variables; clouds move behind the birds. */
-.identity-chirping-sky{position:absolute;inset:0;overflow:hidden;background:linear-gradient(180deg,rgba(216,219,221,.76) 0%,rgba(180,184,188,.64) 30%,rgba(110,115,123,.49) 61%,rgba(31,35,43,.32) 83%,rgba(8,10,15,.16) 100%);animation:identity-chirping-haze 10s linear infinite}
-.identity-chirping-clouds{position:absolute;inset:-25% -65%;filter:blur(15px);background-repeat:no-repeat;will-change:transform}
-.identity-chirping-clouds-back{background-image:radial-gradient(ellipse at 21% 20%,#f4f5f6d9 0%,#e1e4e6a6 13%,transparent 34%),radial-gradient(ellipse at 64% 8%,#ffffffcc 0%,#e6e8eb80 16%,transparent 36%),radial-gradient(ellipse at 86% 44%,#dce0e48c 0%,transparent 30%),radial-gradient(ellipse at 42% 55%,#d7dce166 0%,transparent 26%);animation:identity-chirping-cloud-back 10s linear infinite}
-.identity-chirping-clouds-front{inset:-20% -75%;background-image:radial-gradient(ellipse at 20% 35%,#f6f7f8a6 0%,#e9ecef66 10%,transparent 25%),radial-gradient(ellipse at 58% 23%,#ffffffb3 0%,#eef0f273 12%,transparent 29%),radial-gradient(ellipse at 80% 62%,#e4e7eb80 0%,transparent 24%);filter:blur(10px);animation:identity-chirping-cloud-front 10s linear infinite}
-@keyframes identity-chirping-cloud-back{0%{transform:translate(-10%,7%) scale(1.04)}50%,100%{transform:translate(12%,-6%) scale(1.12)}}
-@keyframes identity-chirping-cloud-front{0%{transform:translate(15%,4%) scale(1.08)}50%,100%{transform:translate(-17%,-9%) scale(1)}}
-.identity-chirping-flight{position:absolute;inset:0;opacity:0;animation:identity-chirping-flight 10s linear var(--bird-lag) infinite}
-.identity-chirping-flight svg{position:absolute;left:var(--bird-x);top:var(--bird-y);width:var(--bird-size);height:auto;overflow:visible;fill:#080910;filter:blur(var(--bird-blur)) drop-shadow(0 3px 3px #08091066);transform:translate(-50%,-50%) rotate(var(--bird-bank))}
-.identity-chirping-wing{transform-box:view-box;transform-origin:60px 55px;animation:identity-chirping-flap var(--bird-flap) ease-in-out infinite alternate}
-.identity-chirping-wing-right{animation-delay:-.12s}
-@keyframes identity-chirping-cycle{0%,49.999%{visibility:visible}50%,100%{visibility:hidden}}
-@keyframes identity-chirping-haze{0%,50%,100%{opacity:0}6%,38%{opacity:1}49.999%{opacity:0}}
-@keyframes identity-chirping-flight{0%{opacity:0;transform:translate(-35%,65%) scale(.65)}3%{opacity:.85}12%{opacity:1;transform:translate(4%,8%) scale(1)}21%{opacity:.95;transform:translate(-8%,-48%) scale(1.18)}30%,100%{opacity:0;transform:translate(22%,-150%) scale(.8)}}
-@keyframes identity-chirping-flap{0%{transform:scaleY(1) rotate(-7deg)}100%{transform:scaleY(-.38) rotate(8deg)}}
+.identity-chirping-sky{position:absolute;inset:0;overflow:hidden;background:linear-gradient(180deg,#c0c2c5ad 0%,#898d938c 25%,#41454c80 48%,#13151c8a 73%,#06080d99 100%)}
+.identity-chirping-clouds{position:absolute;inset:-20% -45%;background-repeat:no-repeat}
+.identity-chirping-clouds-back{background:radial-gradient(ellipse at 26% 13%,#f0f1f4b3,transparent 37%),radial-gradient(ellipse at 75% 20%,#e9ebed99,transparent 33%),radial-gradient(ellipse at 40% 54%,#afb5be38,transparent 30%);filter:blur(22px);animation:identity-chirping-cloud-back 10s linear infinite}
+.identity-chirping-clouds-front{background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22360%22%20height%3D%22640%22%3E%3Cfilter%20id%3D%22n%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%22.016%20.028%22%20numOctaves%3D%224%22%20seed%3D%2212%22%2F%3E%3CfeColorMatrix%20type%3D%22saturate%22%20values%3D%220%22%2F%3E%3CfeComponentTransfer%3E%3CfeFuncR%20type%3D%22linear%22%20slope%3D%221.5%22%20intercept%3D%22.12%22%2F%3E%3CfeFuncG%20type%3D%22linear%22%20slope%3D%221.5%22%20intercept%3D%22.12%22%2F%3E%3CfeFuncB%20type%3D%22linear%22%20slope%3D%221.5%22%20intercept%3D%22.12%22%2F%3E%3CfeFuncA%20type%3D%22linear%22%20slope%3D%22.7%22%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3Cpath%20fill%3D%22%23ddd%22%20filter%3D%22url(%23n)%22%20d%3D%22M0%200h360v640H0z%22%2F%3E%3C%2Fsvg%3E");background-size:100% 100%;opacity:.32;mask-image:linear-gradient(#000 0%,#0009 30%,transparent 78%);animation:identity-chirping-cloud-front 10s linear infinite}
+.identity-chirping-rim{position:absolute;inset:-5px;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22360%22%20height%3D%22640%22%3E%3Cfilter%20id%3D%22n%22%3E%3CfeTurbulence%20type%3D%22fractalNoise%22%20baseFrequency%3D%22.016%20.028%22%20numOctaves%3D%224%22%20seed%3D%2212%22%2F%3E%3CfeColorMatrix%20type%3D%22saturate%22%20values%3D%220%22%2F%3E%3CfeComponentTransfer%3E%3CfeFuncR%20type%3D%22linear%22%20slope%3D%221.5%22%20intercept%3D%22.12%22%2F%3E%3CfeFuncG%20type%3D%22linear%22%20slope%3D%221.5%22%20intercept%3D%22.12%22%2F%3E%3CfeFuncB%20type%3D%22linear%22%20slope%3D%221.5%22%20intercept%3D%22.12%22%2F%3E%3CfeFuncA%20type%3D%22linear%22%20slope%3D%22.7%22%2F%3E%3C%2FfeComponentTransfer%3E%3C%2Ffilter%3E%3Cpath%20fill%3D%22%23ddd%22%20filter%3D%22url(%23n)%22%20d%3D%22M0%200h360v640H0z%22%2F%3E%3C%2Fsvg%3E");background-size:170px 290px;opacity:.8;mask-image:linear-gradient(90deg,#000,transparent 3%,transparent 97%,#000),linear-gradient(#000,transparent 2%,transparent 99%,#000);animation:identity-chirping-rim 10s linear infinite}
+.identity-chirping-wisp{position:absolute;inset:-25%;background:radial-gradient(ellipse at 75% 15%,#eef0f240,transparent 24%),radial-gradient(ellipse at 12% 45%,#d5dae52b,transparent 17%);filter:blur(14px);animation:identity-chirping-cloud-front 10s linear infinite}
+.identity-chirping-flight{position:absolute;inset:0;opacity:0;animation:identity-chirping-flight 10s cubic-bezier(.26,.37,.58,.78) var(--bird-lag) infinite}
+.identity-chirping-flight svg{position:absolute;left:var(--bird-x);top:var(--bird-y);width:var(--bird-size);max-width:68%;height:auto;overflow:visible;fill:#080a11;filter:blur(var(--bird-blur)) drop-shadow(0 2px 2px #03050a60);transform:translate(-50%,-50%) rotate(var(--bird-bank))}
+.identity-chirping-bird{transform-origin:60px 55px;animation:identity-chirping-bank 2.7s ease-in-out infinite alternate}
+.identity-chirping-wing{transform-origin:60px 55px;animation:identity-chirping-flap var(--bird-flap) cubic-bezier(.4,0,.3,1) infinite}
+.identity-chirping-wing-right{animation-delay:-.045s}
+.identity-chirping-feather{fill:none;stroke:#343a49;stroke-opacity:.28;stroke-width:.65}
+@keyframes identity-chirping-cycle{0%{opacity:0;visibility:visible}7%,37%{opacity:1;visibility:visible}50%,100%{opacity:0;visibility:hidden}}
+@keyframes identity-chirping-cloud-back{0%{transform:translate(-9%,4%) scale(1.05)}50%,100%{transform:translate(12%,-8%) scale(1.17)}}
+@keyframes identity-chirping-cloud-front{0%{transform:translate(9%,5%)}50%,100%{transform:translate(-12%,-8%)}}
+@keyframes identity-chirping-rim{0%{transform:translateY(0)}50%,100%{transform:translateY(-20px)}}
+@keyframes identity-chirping-flight{0%{opacity:0;transform:translate(calc(var(--bird-drift) * -1),55%) scale(.72)}3%{opacity:.8}11%{opacity:1;transform:translate(0,0) scale(1)}20%{opacity:1;transform:translate(var(--bird-drift),-45%) scale(1.2)}30%,100%{opacity:0;transform:translate(var(--bird-drift),-145%) scale(1.05)}}
+/* A short downstroke, recovery, then a held glide; no flat wing inversion. */
+@keyframes identity-chirping-flap{0%,100%{transform:rotate(0) scaleY(.93)}22%{transform:rotate(-12deg) scaleY(.26)}43%{transform:rotate(9deg) scaleY(.78)}62%,84%{transform:rotate(3deg) scaleY(1)}}
+@keyframes identity-chirping-bank{from{transform:rotate(-9deg) scaleX(.86)}to{transform:rotate(12deg) scaleX(1)}}
 .identity-effects input[value="chirping"]+span{text-transform:none}
 @media(prefers-reduced-motion:reduce){.identity-chirping-flock{display:none}.identity-chirping-flock *{animation:none!important}}
