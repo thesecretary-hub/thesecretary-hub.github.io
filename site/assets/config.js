@@ -6,6 +6,7 @@ export const APP_CONFIG = Object.freeze({
 
   supabaseUrl: 'https://ubxgpkjuzkwlewofxmfy.supabase.co',
   supabasePublishableKey: 'sb_publishable_Nv7jtLPDojg2bKUAuMXlBw_T3MuegRF',
+  forumVapidPublicKey: 'BOs1-KQ4873BCISnphCwn1DQZuHeho2AXOhBZmpRo3RLBbKGXKqeeDjI9iPq4ip9I_T5xGAwPHzbwQYSKGvyIzQ',
 
   adminEmail: 'dikshitaggarwal007@gmail.com',
 });

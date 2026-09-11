@@ -91,6 +91,21 @@ topic, cannot reply to a closed topic, can toggle/switch a topic vote, and sees 
 reply voting controls. Refreshing the same topic within 24 hours must not add
 another view. Anonymous users can browse and search but must sign in to participate.
 
+For the Informal category and forum browser notifications, apply
+`supabase/migrations/0010_forum_informal_and_push.sql`. A generated VAPID key pair
+is stored locally in the ignored `.env.notifications.local` file. Configure the
+Edge Function secrets and deploy it:
+
+```powershell
+supabase secrets set --env-file .env.notifications.local
+supabase functions deploy forum-reply-notification
+```
+
+Publish the `site/` directory after the migration and function deployment. Signed-in
+members can enable or disable notifications from either the forum index or a
+discussion. Notifications go to the topic author and the author of a directly
+replied-to comment, excluding the member who posted the reply.
+
 ## 2. Create the administrator account
 
 1. Register normally at `/register/` using `dikshitaggarwal007@gmail.com`.

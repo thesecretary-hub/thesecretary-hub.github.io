@@ -1,2 +1,5 @@
 [functions.login-identifier]
 verify_jwt = false
+
+[functions.forum-reply-notification]
+verify_jwt = true

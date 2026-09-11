@@ -1,7 +1,8 @@
 import { supabase } from './supabase-client.js';
 import { avatarUrl, esc, formatDate, mountLayout, showToast } from './layout.js?v=4.5.0';
+import { mountForumNotifications, notifyForumReply } from './forum-notifications.js?v=1.0.0';
 
-const categories={suggestion:'Suggestions',bugs:'Bugs & glitches','website-error':'Website help','fatal-error':'Critical issues',downtime:'Downtime'};
+const categories={suggestion:'Suggestions',bugs:'Bugs & glitches','website-error':'Website help','fatal-error':'Critical issues',downtime:'Downtime',informal:'Informal'};
 const root=document.querySelector('[data-topic-root]');
 const viewer=await mountLayout('forums');
 const slug=new URLSearchParams(location.search).get('slug');
@@ -42,11 +43,12 @@ async function load(){
   }
 }
 function draw(){
-  root.innerHTML=`<main class="container page topic-page forum-v2"><nav class="topic-breadcrumb" aria-label="Breadcrumb"><a href="/forums/">Forums</a><span>/</span><a href="/forums/?category=${topic.category}">${categories[topic.category]}</a></nav><header class="topic-title-block"><div><span class="topic-status state-${topic.status}" data-status>${topic.status}</span><h1>${esc(topic.title)}</h1><p>Started ${formatDate(topic.created_at)} · by @${esc(topic.username)}</p></div></header><div class="topic-toolbar"><span><strong data-reply-count>${topic.reply_count}</strong> replies</span><span><strong data-views>${topic.views}</strong> views</span><a href="#original-post">Original post</a><a href="#reply-composer">Join discussion ↓</a></div><article class="forum-post original-post" id="original-post"><header><div class="post-identity">${identity(topic)}</div><span class="op-label">Original post</span></header><div class="forum-copy">${copy(topic.body)}</div><footer><div class="vote-control" aria-label="Vote on the original post"><button data-vote="1" aria-label="Upvote original post" aria-pressed="${myVote===1}" ${!viewer?'disabled':''}>▲</button><strong data-score aria-live="polite">${topic.vote_score}</strong><button data-vote="-1" aria-label="Downvote original post" aria-pressed="${myVote===-1}" ${!viewer?'disabled':''}>▼</button></div>${!viewer?`<a href="${login}">Log in to vote</a>`:'<small>Vote on this discussion</small>'}<div class="topic-management">${canManage()?'<button class="button small ghost" data-toggle-topic></button>':''}</div></footer></article><div class="replies-heading"><h2>Conversation</h2><span>Oldest first</span></div><div data-solution-banner></div><section class="forum-replies" aria-label="Replies" data-replies></section><div class="reply-load"><p data-reply-error role="alert"></p><button class="button ghost" data-more>Load replies</button></div><section class="reply-composer" id="reply-composer"><div data-composer></div></section></main>`;
+  root.innerHTML=`<main class="container page topic-page forum-v2"><div data-forum-notifications></div><nav class="topic-breadcrumb" aria-label="Breadcrumb"><a href="/forums/">Forums</a><span>/</span><a href="/forums/?category=${topic.category}">${categories[topic.category]}</a></nav><header class="topic-title-block"><div><span class="topic-status state-${topic.status}" data-status>${topic.status}</span><h1>${esc(topic.title)}</h1><p>Started ${formatDate(topic.created_at)} · by @${esc(topic.username)}</p></div></header><div class="topic-toolbar"><span><strong data-reply-count>${topic.reply_count}</strong> replies</span><span><strong data-views>${topic.views}</strong> views</span><a href="#original-post">Original post</a><a href="#reply-composer">Join discussion ↓</a></div><article class="forum-post original-post" id="original-post"><header><div class="post-identity">${identity(topic)}</div><span class="op-label">Original post</span></header><div class="forum-copy">${copy(topic.body)}</div><footer><div class="vote-control" aria-label="Vote on the original post"><button data-vote="1" aria-label="Upvote original post" aria-pressed="${myVote===1}" ${!viewer?'disabled':''}>▲</button><strong data-score aria-live="polite">${topic.vote_score}</strong><button data-vote="-1" aria-label="Downvote original post" aria-pressed="${myVote===-1}" ${!viewer?'disabled':''}>▼</button></div>${!viewer?`<a href="${login}">Log in to vote</a>`:'<small>Vote on this discussion</small>'}<div class="topic-management">${canManage()?'<button class="button small ghost" data-toggle-topic></button>':''}</div></footer></article><div class="replies-heading"><h2>Conversation</h2><span>Oldest first</span></div><div data-solution-banner></div><section class="forum-replies" aria-label="Replies" data-replies></section><div class="reply-load"><p data-reply-error role="alert"></p><button class="button ghost" data-more>Load replies</button></div><section class="reply-composer" id="reply-composer"><div data-composer></div></section></main>`;
   updateState();
   root.querySelectorAll('[data-vote]').forEach(button=>button.onclick=()=>vote(Number(button.dataset.vote)));
   root.querySelector('[data-toggle-topic]')?.addEventListener('click',()=>changeStatus({status:topic.status==='closed'?(topic.solution_reply_id?'solved':'open'):'closed'}));
   root.querySelector('[data-more]').onclick=loadReplies;
+  mountForumNotifications(viewer,root.querySelector('[data-forum-notifications]'));
 }
 function updateState(){
   const badge=root.querySelector('[data-status]'); badge.textContent=topic.status;badge.className=`topic-status state-${topic.status}`;
@@ -131,6 +133,7 @@ async function sendReply(event){
   try{
     const {data:posted,error}=await supabase.from('forum_replies').insert({topic_id:topic.id,user_id:viewer.id,parent_id:Number(form.elements.parent_id.value)||null,body}).select('id').single();
     if(error)throw error;
+    if(posted?.id)notifyForumReply(posted.id);
     form.reset();form.querySelector('[data-replying]').hidden=true;
     showToast('Reply posted.');
     // Reload the visible reply window; preserve chronological ordering and avoid duplicates.
