@@ -17,7 +17,7 @@ const STATUS_CONFIG = {
 
 const HOST_CONFIG = {
   DOMAINS: ['thesecretary.xyz', 'www.thesecretary.xyz'],
-  VALIDATION_MINUTES: 20,
+  VALIDATION_MINUTES: 5,
   AUTOMATIC_OFFLINE_HOURS: 48,
   MANUAL_RATE_LIMIT_MINUTES: 20,
   MAX_AUTOMATIC_SWITCHES: 2,
@@ -29,11 +29,11 @@ const HOST_CONFIG = {
 // Credentials never belong in this source file. Add each referenced property in
 // Apps Script > Project settings > Script properties.
 const HOST_SERVERS = [
-  {key:'virginia', name:'The-Secretary Virginia US', region:'Virginia US', serviceIdProperty:'RENDER_VIRGINIA_SERVICE_ID', apiKeyProperty:'RENDER_VIRGINIA_API_KEY'},
-  {key:'singapore_n2', name:'The-Secretary Singapore N-2', region:'Singapore N-2', serviceIdProperty:'RENDER_SINGAPORE_N2_SERVICE_ID', apiKeyProperty:'RENDER_SINGAPORE_N2_API_KEY'},
-  {key:'singapore_n1', name:'The-Secretary Singapore N-1', region:'Singapore N-1', serviceIdProperty:'RENDER_SINGAPORE_N1_SERVICE_ID', apiKeyProperty:'RENDER_SINGAPORE_N1_API_KEY'},
-  {key:'frankfurt', name:'The-Secretary Frankfurt EU', region:'Frankfurt EU', serviceIdProperty:'RENDER_FRANKFURT_SERVICE_ID', apiKeyProperty:'RENDER_FRANKFURT_API_KEY'},
-  {key:'ohio', name:'The-Secretary Ohio US', region:'Ohio US', serviceIdProperty:'RENDER_OHIO_SERVICE_ID', apiKeyProperty:'RENDER_OHIO_API_KEY'},
+  {key:'virginia', name:'The-Secretary Virginia US', region:'Virginia US', hostname:'the-secretary.onrender.com', serviceIdProperty:'RENDER_VIRGINIA_SERVICE_ID', apiKeyProperty:'RENDER_VIRGINIA_API_KEY'},
+  {key:'singapore_n2', name:'The-Secretary Singapore N-2', region:'Singapore N-2', hostname:'the-secretary-c8eg.onrender.com', serviceIdProperty:'RENDER_SINGAPORE_N2_SERVICE_ID', apiKeyProperty:'RENDER_SINGAPORE_N2_API_KEY'},
+  {key:'singapore_n1', name:'The-Secretary Singapore N-1', region:'Singapore N-1', hostname:'the-secretary-1iwz.onrender.com', serviceIdProperty:'RENDER_SINGAPORE_N1_SERVICE_ID', apiKeyProperty:'RENDER_SINGAPORE_N1_API_KEY'},
+  {key:'frankfurt', name:'The-Secretary Frankfurt EU', region:'Frankfurt EU', hostname:'the-secretary-uu6w.onrender.com', serviceIdProperty:'RENDER_FRANKFURT_SERVICE_ID', apiKeyProperty:'RENDER_FRANKFURT_API_KEY'},
+  {key:'ohio', name:'The-Secretary Ohio US', region:'Ohio US', hostname:'the-secretary-ohio-us.onrender.com', serviceIdProperty:'RENDER_OHIO_SERVICE_ID', apiKeyProperty:'RENDER_OHIO_API_KEY'},
 ];
 
 const DEFAULT_SETTINGS = {
@@ -145,7 +145,6 @@ function runScheduledChecks() {
     const http = probeHttp_(settings.targetUrl);
     const discord = probeDiscord_(settings.discordStatusUrl);
     appendCheck_(http, discord);
-    abortRecoveredPreCutoverSwitch_(http);
     processHttpTransition_(http, settings);
     processDiscordTransition_(discord, settings);
     processHostAutomation_(http, discord, settings);
@@ -279,9 +278,11 @@ function buildMonitor_(settings, checks, latest) {
 
 function publicServerStatus_() {
   const offline = getOfflineServers_();
+  const activeKey = PropertiesService.getScriptProperties().getProperty('HOST_ACTIVE_KEY') || '';
   return HOST_SERVERS.map(function (server) {
     const hold = offline[server.key] || null;
-    return {key:server.key,name:server.name,region:server.region,status:hold?'down':'operational',label:hold?'Blacklisted':'Operational',offlineUntil:hold?hold.until:null,reason:hold?hold.reason:''};
+    const label = server.key === activeKey ? 'Running' : hold ? 'Ready · temporarily excluded' : 'Ready for initialization';
+    return {key:server.key,name:server.name,region:server.region,status:'operational',label:label,active:server.key===activeKey,offlineUntil:hold?hold.until:null,reason:hold?hold.reason:''};
   });
 }
 
@@ -649,8 +650,17 @@ function processHostAutomation_(http, discord, settings) {
       state.stepFailures = Number(state.stepFailures || 0) + 1;
       state.updatedAt = new Date().toISOString();
       saveHostSwitchState_(state);
-      if (state.stepFailures >= 3) retryOrEmergency_(state, 'Host-switch step failed repeatedly: ' + state.lastError);
+      if (state.stepFailures >= 3) enterHostEmergency_(state, 'Host-switch step failed repeatedly: ' + state.lastError);
     }
+    return;
+  }
+
+  try {
+    const topology = inspectHostTopology_(getServerRuntimeStates_());
+    if (!topology.consistent) throw new Error(topology.error);
+    clearHostTopologyEmergency_();
+  } catch (error) {
+    reportHostTopologyEmergency_(error.message || String(error));
     return;
   }
 
@@ -695,25 +705,9 @@ function editMaintenance_(data) {
   return{item:item};
 }
 
-// A brief outage can recover while the standby deployment is still preparing.
-// In that case no traffic has moved, so continuing the switch only keeps the
-// public incident open and risks an unnecessary cutover.
-function abortRecoveredPreCutoverSwitch_(http) {
-  if (!http.up) return false;
-  const state = getHostSwitchState_();
-  if (!state || state.mode !== 'automatic' || ['preparing','waiting_deploy'].indexOf(state.phase) < 0) return false;
-  writeHostSwitchLog_(state, 'cancelled', 'Automatic switch cancelled because the active service recovered before traffic moved.');
-  PropertiesService.getScriptProperties().deleteProperty('HOST_SWITCH_STATE');
-  invalidateServerInventory_();
-  try { enforceStandbySuspension_(); }
-  catch (error) { console.error('Recovered switch cleanup failed: ' + (error.message || String(error))); }
-  return true;
-}
-
 function startAutomaticHostSwitch_(reason) {
   const inventory = refreshServerInventory_();
-  const activeKey = discoverActiveServerKey_(inventory);
-  if (!activeKey) throw new Error('The active Render service could not be identified from Cloudflare DNS.');
+  const activeKey = requireConsistentActiveServer_(inventory);
   const candidate = selectBestServer_(inventory, [activeKey]);
   if (!candidate) throw new Error('No eligible standby server is available.');
   const now = new Date().toISOString();
@@ -726,7 +720,13 @@ function startAutomaticHostSwitch_(reason) {
   saveHostSwitchState_(state);
   writeHostSwitchLog_(state, 'started', 'Automatic host switch started.');
   try { beginHostSwitchAttempt_(state); }
-  catch (error) { retryOrEmergency_(state, 'The first host-switch attempt could not start: ' + (error.message || String(error))); }
+  catch (error) {
+    state.lastError = error.message || String(error);
+    state.stepFailures = 1;
+    state.updatedAt = new Date().toISOString();
+    saveHostSwitchState_(state);
+    writeHostSwitchLog_(state, 'step_failed', 'Host cutover will retry: ' + state.lastError);
+  }
 }
 
 function manualHostSwitch_(serverKey, reason) {
@@ -742,9 +742,8 @@ function manualHostSwitch_(serverKey, reason) {
   const retryAt = lastManual + HOST_CONFIG.MANUAL_RATE_LIMIT_MINUTES * 60000;
   if (Date.now() < retryAt) throw new Error('Manual host switches are limited to one every 20 minutes. Try again after ' + new Date(retryAt).toISOString() + '.');
 
-  const inventory = getServerInventory_(false);
-  const activeKey = discoverActiveServerKey_(inventory);
-  if (!activeKey) throw new Error('The active Render service could not be identified. Refresh server data and try again.');
+  const inventory = refreshServerInventory_();
+  const activeKey = requireConsistentActiveServer_(inventory);
   if (activeKey === serverKey) throw new Error('That server is already the active host.');
 
   const now = new Date().toISOString();
@@ -758,58 +757,42 @@ function manualHostSwitch_(serverKey, reason) {
   writeHostSwitchLog_(state, 'started', 'Manual host switch started: ' + reason);
   try { beginHostSwitchAttempt_(state); }
   catch (error) {
-    props.deleteProperty('HOST_SWITCH_STATE');
-    writeHostSwitchLog_(state, 'attempt_failed', 'Manual switch could not start: ' + (error.message || String(error)));
+    state.lastError = error.message || String(error);
+    state.stepFailures = 1;
+    state.updatedAt = new Date().toISOString();
+    saveHostSwitchState_(state);
+    writeHostSwitchLog_(state, 'step_failed', 'Manual cutover will retry: ' + state.lastError);
     throw error;
   }
   return {switchState: sanitizeSwitchState_(state)};
 }
 
 function beginHostSwitchAttempt_(state) {
-  const target = requireServerByKey_(state.targetKey);
-  const service = renderRequest_(target, '/services/' + encodeURIComponent(target.serviceId), 'get', null, [200]).data;
-  if (String(service.suspended || '').toLowerCase() === 'suspended' || service.suspended === true) {
-    renderRequest_(target, '/services/' + encodeURIComponent(target.serviceId) + '/resume', 'post', null, [202]);
-  }
-  const deployment = renderRequest_(target, '/services/' + encodeURIComponent(target.serviceId) + '/deploys', 'post', {clearCache:'do_not_clear'}, [201, 202]).data;
-  const deploy = deployment.deploy || deployment;
-  if (!deploy.id) throw new Error('Render accepted the deploy but did not return a deploy ID.');
-  state.deployId = deploy.id;
-  state.phase = 'waiting_deploy';
+  state.phase = 'cutover';
   state.stepFailures = 0;
-  state.attemptStartedAt = new Date().toISOString();
-  state.updatedAt = state.attemptStartedAt;
+  state.updatedAt = new Date().toISOString();
   saveHostSwitchState_(state);
-  writeHostSwitchLog_(state, 'deploying', 'Deploying the latest commit to ' + target.name + '.');
+  performHostCutover_(state);
 }
 
 function advanceHostSwitch_(state, http, discord, settings) {
-  if (state.phase === 'waiting_deploy' || state.phase === 'preparing') {
-    if (!state.deployId) return beginHostSwitchAttempt_(state);
-    const target = requireServerByKey_(state.targetKey);
-    const deployment = renderRequest_(target, '/services/' + encodeURIComponent(target.serviceId) + '/deploys/' + encodeURIComponent(state.deployId), 'get', null, [200]).data;
-    const deploy = deployment.deploy || deployment;
-    const status = String(deploy.status || '').toLowerCase();
-    if (['live', 'succeeded'].indexOf(status) >= 0) {
-      state.phase = 'cutover';
-      state.stepFailures = 0;
-      state.updatedAt = new Date().toISOString();
-      saveHostSwitchState_(state);
-      performHostCutover_(state);
-      return;
-    }
-    if (['build_failed','update_failed','failed','canceled','cancelled','deactivated'].indexOf(status) >= 0) {
-      return retryOrEmergency_(state, 'Render deployment ended with status "' + status + '".');
-    }
-    if (Date.now() - new Date(state.attemptStartedAt || state.createdAt).getTime() > 120 * 60000) {
-      return retryOrEmergency_(state, 'Render deployment did not become live within two hours.');
-    }
-    return;
-  }
-
+  // waiting_deploy is accepted for migration from the previous state machine.
+  if (state.phase === 'waiting_deploy' || state.phase === 'preparing') return beginHostSwitchAttempt_(state);
   if (state.phase === 'cutover') return performHostCutover_(state);
   if (state.phase !== 'validating' || Date.now() < new Date(state.validateAfter).getTime()) return;
 
+  let topology;
+  try { topology = inspectHostTopology_(getServerRuntimeStates_()); }
+  catch (error) {
+    reportHostTopologyEmergency_(error.message || String(error));
+    return enterHostEmergency_(state, 'Post-switch topology could not be verified: ' + (error.message || String(error)));
+  }
+  if (!topology.consistent || topology.activeKey !== state.targetKey) {
+    const topologyError = topology.error || 'Expected ' + state.targetKey + ' to own DNS and be the single resumed Render service.';
+    reportHostTopologyEmergency_(topologyError);
+    return enterHostEmergency_(state, 'Post-switch topology mismatch: ' + topologyError);
+  }
+  clearHostTopologyEmergency_();
   const healthy = Boolean(http.up) && !discord.rateLimited && discord.state === 'operational';
   if (healthy) {
     finalizeSuccessfulHostSwitch_(state, http, discord, settings);
@@ -822,27 +805,37 @@ function advanceHostSwitch_(state, http, discord, settings) {
 function performHostCutover_(state) {
   const source = requireServerByKey_(state.sourceKey);
   const target = requireServerByKey_(state.targetKey);
-  const targetServiceResponse = renderRequest_(target, '/services/' + encodeURIComponent(target.serviceId), 'get', null, [200]).data;
-  const targetService = targetServiceResponse.service || targetServiceResponse;
-  const targetHost = hostnameFromUrl_(targetService.url);
-  if (!targetHost) throw new Error('Render did not return the target service hostname.');
+  const targetHost = normalizeHostname_(target.hostname);
+  if (!targetHost) throw new Error('The target server hostname is not configured.');
 
+  writeHostSwitchLog_(state, 'removing_domains', 'Removing custom domains from ' + source.name + '.');
   HOST_CONFIG.DOMAINS.forEach(function (domain) {
     deleteRenderDomain_(source, domain);
   });
-  HOST_CONFIG.DOMAINS.forEach(function (domain) {
-    ensureRenderDomain_(target, domain);
-  });
+
+  writeHostSwitchLog_(state, 'suspending_source', 'Suspending ' + source.name + '.');
+  setRenderSuspended_(source, true);
+
+  writeHostSwitchLog_(state, 'resuming_target', 'Resuming ' + target.name + '.');
+  setRenderSuspended_(target, false);
+
+  writeHostSwitchLog_(state, 'updating_dns', 'Pointing Cloudflare DNS to ' + targetHost + '.');
   HOST_CONFIG.DOMAINS.forEach(function (domain) {
     updateCloudflareRecord_(domain, targetHost);
   });
+  verifyCloudflareTargets_(targetHost);
+
+  writeHostSwitchLog_(state, 'adding_domains', 'Adding custom domains to ' + target.name + '.');
+  HOST_CONFIG.DOMAINS.forEach(function (domain) {
+    ensureRenderDomain_(target, domain);
+  });
+
   HOST_CONFIG.DOMAINS.forEach(function (domain) {
     renderRequest_(target, '/services/' + encodeURIComponent(target.serviceId) + '/custom-domains/' + encodeURIComponent(domain) + '/verify', 'post', null, [200, 202]);
   });
 
   const now = new Date();
   PropertiesService.getScriptProperties().setProperty('HOST_ACTIVE_KEY', target.key);
-  setServerOfflineInternal_(source.key, HOST_CONFIG.AUTOMATIC_OFFLINE_HOURS, 'Previous active host after switch to ' + target.name + '.', 'automatic');
   state.phase = 'validating';
   state.stepFailures = 0;
   state.cutoverAt = now.toISOString();
@@ -850,7 +843,6 @@ function performHostCutover_(state) {
   state.targetHostname = targetHost;
   state.updatedAt = now.toISOString();
   saveHostSwitchState_(state);
-  suspendAllExcept_(target.key);
   writeHostSwitchLog_(state, 'validating', 'Traffic moved to ' + target.name + '; validation ends at ' + state.validateAfter + '.');
   sendAdminHostEmail_('The Secretary host switched to ' + target.name, [
     'Reason: ' + state.reason,
@@ -866,6 +858,7 @@ function retryOrEmergency_(state, reason) {
   writeHostSwitchLog_(state, 'attempt_failed', state.lastError);
   if (state.attempts >= state.maxAttempts) return enterHostEmergency_(state, state.lastError);
 
+  setServerOfflineInternal_(state.sourceKey, HOST_CONFIG.AUTOMATIC_OFFLINE_HOURS, 'Previous active host failed before switch validation.', 'automatic');
   setServerOfflineInternal_(state.targetKey, HOST_CONFIG.AUTOMATIC_OFFLINE_HOURS, state.lastError, 'automatic');
   const inventory = refreshServerInventory_();
   const candidate = selectBestServer_(inventory, state.triedKeys || []);
@@ -875,7 +868,6 @@ function retryOrEmergency_(state, reason) {
   state.triedKeys = (state.triedKeys || []).concat([candidate.key]);
   state.attempts += 1;
   state.phase = 'preparing';
-  state.deployId = '';
   state.stepFailures = 0;
   state.attemptStartedAt = '';
   state.validateAfter = '';
@@ -891,6 +883,7 @@ function retryOrEmergency_(state, reason) {
 
 function finalizeSuccessfulHostSwitch_(state, http, discord, settings) {
   const target = requireServerByKey_(state.targetKey);
+  setServerOfflineInternal_(state.sourceKey, HOST_CONFIG.AUTOMATIC_OFFLINE_HOURS, 'Previous active host after validated switch to ' + target.name + '.', 'automatic');
   suspendAllExcept_(target.key);
   PropertiesService.getScriptProperties().setProperty('HOST_LAST_SWITCH_JSON', JSON.stringify({
     id: state.id, mode: state.mode, reason: state.reason, sourceKey: state.originalKey,
@@ -933,10 +926,7 @@ function enterHostEmergency_(state, reason) {
 
 function hostSwitchBlocksRecovery_() {
   const state = getHostSwitchState_();
-  // Once cutover completes, the public endpoint is the validation target. A
-  // successful probe is real recovery even though the longer infrastructure
-  // validation continues in the background.
-  return Boolean(state && ['preparing','waiting_deploy','cutover'].indexOf(state.phase) >= 0);
+  return Boolean(state && ['preparing','waiting_deploy','cutover','validating'].indexOf(state.phase) >= 0);
 }
 
 function getHostSwitchState_() {
@@ -981,9 +971,13 @@ function getServerAdminPayload_(forceRefresh) {
   let inventory;
   try { inventory = getServerInventory_(Boolean(forceRefresh)); }
   catch (error) { inventory = getCachedServerInventory_(); if (!inventory.length) throw error; }
-  const activeKey = discoverActiveServerKey_(inventory);
   const offline = getOfflineServers_();
   const switchState = getHostSwitchState_();
+  let topology = null;
+  try { topology = inspectHostTopology_(getServerRuntimeStates_()); }
+  catch (error) { topology = {consistent:false,activeKey:'',dnsKey:'',runningKey:'',records:[],runningKeys:[],error:error.message || String(error)}; }
+  const activeKey = topology.consistent ? topology.activeKey : switchState ? (topology.dnsKey || topology.runningKey || switchState.targetKey || switchState.sourceKey || '') : '';
+  if (topology.consistent) PropertiesService.getScriptProperties().setProperty('HOST_ACTIVE_KEY', activeKey);
   return {
     generatedAt: new Date().toISOString(), activeKey: activeKey, servers: inventory.map(function (server) {
       const hold = offline[server.key] || null;
@@ -994,9 +988,9 @@ function getServerAdminPayload_(forceRefresh) {
         eligible: server.key !== activeKey && !hold && !server.error
       });
     }),
-    switchState: sanitizeSwitchState_(switchState),
+    switchState: sanitizeSwitchState_(switchState), topology: topology,
     lastSwitch: parseJsonProperty_('HOST_LAST_SWITCH_JSON'),
-    emergency: PropertiesService.getScriptProperties().getProperty('HOST_AUTOMATION_EMERGENCY') === '1',
+    emergency: PropertiesService.getScriptProperties().getProperty('HOST_AUTOMATION_EMERGENCY') === '1' || PropertiesService.getScriptProperties().getProperty('HOST_TOPOLOGY_EMERGENCY') === '1',
     manualRetryAt: manualRetryAt_(),
     pipelineUsageIsEstimate: true,
     recentSwitches: sortRecords_(readRecords_('hostSwitches'), 'updatedAt').slice(0, 20)
@@ -1030,7 +1024,7 @@ function refreshServerInventory_() {
   });
   const responses = requests.length ? UrlFetchApp.fetchAll(requests) : [];
   const servers = configured.map(function (server, index) {
-    const safe = {key:server.key,name:server.name,region:server.region,serviceId:server.serviceId,bandwidthLimitGb:server.bandwidthLimitGb,pipelineLimitMinutes:server.pipelineLimitMinutes};
+    const safe = {key:server.key,name:server.name,region:server.region,serviceId:server.serviceId,hostname:normalizeHostname_(server.hostname),bandwidthLimitGb:server.bandwidthLimitGb,pipelineLimitMinutes:server.pipelineLimitMinutes};
     try {
       const serviceResponse = decodeJsonResponse_(responses[index * 3], [200], 'Render').data;
       const service = serviceResponse.service || serviceResponse;
@@ -1042,8 +1036,8 @@ function refreshServerInventory_() {
       const details = service.serviceDetails || {};
       const serviceUrl = details.url || service.url || '';
       return Object.assign(safe, {
-        url: serviceUrl, hostname: hostnameFromUrl_(serviceUrl),
-        suspended: service.suspended === true || String(service.suspended || '').toLowerCase() === 'suspended',
+        url: serviceUrl || 'https://' + server.hostname, hostname:normalizeHostname_(server.hostname), reportedHostname:hostnameFromUrl_(serviceUrl),
+        suspended: isRenderSuspended_(service),
         renderRegion: details.region || service.region || server.region, plan: details.plan || service.plan || '', branch: service.branch || '',
         bandwidthUsedBytes: usedBytes,
         bandwidthRemainingBytes: Math.max(0, server.bandwidthLimitGb * 1000000000 - usedBytes),
@@ -1075,15 +1069,76 @@ function selectBestServer_(inventory, excludedKeys) {
 
 function discoverActiveServerKey_(inventory) {
   const props = PropertiesService.getScriptProperties();
-  const stored = props.getProperty('HOST_ACTIVE_KEY');
-  let dnsTarget = '';
-  try { dnsTarget = getCloudflareDnsRecord_(HOST_CONFIG.DOMAINS[0]).content || ''; } catch (error) {}
-  const normalizedTarget = String(dnsTarget || '').toLowerCase().replace(/^https?:\/\//,'').replace(/[\/.]+$/,'');
-  const found = inventory.find(function (server) { return server.hostname && server.hostname.toLowerCase().replace(/\.$/,'') === normalizedTarget; });
-  if (found) { props.setProperty('HOST_ACTIVE_KEY', found.key); return found.key; }
-  const running = inventory.filter(function (server) { return !server.error && server.suspended === false; });
-  if (running.length === 1) { props.setProperty('HOST_ACTIVE_KEY', running[0].key); return running[0].key; }
-  return stored && inventory.some(function (server) { return server.key === stored; }) ? stored : '';
+  const topology = inspectHostTopology_(inventory);
+  if (topology.consistent) {
+    props.setProperty('HOST_ACTIVE_KEY', topology.activeKey);
+    return topology.activeKey;
+  }
+  const state = getHostSwitchState_();
+  if (state) return topology.dnsKey || topology.runningKey || state.targetKey || state.sourceKey || '';
+  return '';
+}
+
+function requireConsistentActiveServer_(inventory) {
+  const topology = inspectHostTopology_(inventory);
+  if (!topology.consistent) throw new Error(topology.error);
+  PropertiesService.getScriptProperties().setProperty('HOST_ACTIVE_KEY', topology.activeKey);
+  return topology.activeKey;
+}
+
+function inspectHostTopology_(inventory) {
+  const servers = inventory || [];
+  const records = HOST_CONFIG.DOMAINS.map(function (domain) {
+    const record = getCloudflareDnsRecord_(domain);
+    return {domain:domain, target:normalizeHostname_(record && record.content)};
+  });
+  const targets = records.map(function (item) { return item.target; }).filter(Boolean);
+  const uniqueTargets = targets.filter(function (target, index) { return targets.indexOf(target) === index; });
+  const dnsServer = uniqueTargets.length === 1 ? servers.find(function (server) { return normalizeHostname_(server.hostname) === uniqueTargets[0]; }) : null;
+  const running = servers.filter(function (server) { return !server.error && server.suspended === false; });
+  const runningServer = running.length === 1 ? running[0] : null;
+  let error = '';
+  const inventoryErrors = servers.filter(function (server) { return server.error; });
+  if (inventoryErrors.length) error = 'Render state could not be read for ' + inventoryErrors.map(function(server){return server.name + ': ' + server.error;}).join('; ') + '.';
+  else if (records.some(function (item) { return !item.target; })) error = 'One or more Cloudflare CNAME records have no target.';
+  else if (uniqueTargets.length !== 1) error = 'Cloudflare CNAME records disagree: ' + records.map(function (item) { return item.domain + ' -> ' + (item.target || 'missing'); }).join(', ') + '.';
+  else if (!dnsServer) error = 'Cloudflare points to unknown Render hostname ' + uniqueTargets[0] + '.';
+  else if (running.length !== 1) error = 'Expected exactly one resumed Render service but found ' + running.length + ': ' + (running.map(function (server) { return server.name; }).join(', ') || 'none') + '.';
+  else if (dnsServer.key !== runningServer.key) error = 'Cloudflare points to ' + dnsServer.name + ' while the resumed Render service is ' + runningServer.name + '.';
+  return {consistent:!error, activeKey:!error?dnsServer.key:'', dnsKey:dnsServer?dnsServer.key:'', runningKey:runningServer?runningServer.key:'', records:records, runningKeys:running.map(function(server){return server.key;}), error:error};
+}
+
+function getServerRuntimeStates_() {
+  const configured = getConfiguredServers_();
+  const requests = configured.map(function (server) {
+    return {url:'https://api.render.com/v1/services/' + encodeURIComponent(server.serviceId),method:'get',headers:{Authorization:'Bearer ' + server.apiKey,Accept:'application/json'},muteHttpExceptions:true,followRedirects:true};
+  });
+  const responses = requests.length ? UrlFetchApp.fetchAll(requests) : [];
+  return configured.map(function (server, index) {
+    try {
+      const decoded = decodeJsonResponse_(responses[index], [200], 'Render').data;
+      const service = decoded.service || decoded;
+      return Object.assign({}, server, {hostname:normalizeHostname_(server.hostname),suspended:isRenderSuspended_(service),error:''});
+    } catch (error) {
+      return Object.assign({}, server, {hostname:normalizeHostname_(server.hostname),suspended:null,error:error.message || String(error)});
+    }
+  });
+}
+
+function reportHostTopologyEmergency_(message) {
+  message = cleanText_(message, 1000) || 'The active host topology could not be verified.';
+  const props = PropertiesService.getScriptProperties();
+  const signature = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, message)).slice(0, 32);
+  props.setProperty('HOST_TOPOLOGY_EMERGENCY', '1');
+  if (props.getProperty('HOST_TOPOLOGY_ALERT_SIGNATURE') === signature) return;
+  props.setProperty('HOST_TOPOLOGY_ALERT_SIGNATURE', signature);
+  sendAdminHostEmail_('EMERGENCY: DNS and Render host state do not match', message + '\n\nAutomatic host changes have been stopped until DNS and the single resumed Render service match.');
+}
+
+function clearHostTopologyEmergency_() {
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty('HOST_TOPOLOGY_EMERGENCY');
+  props.deleteProperty('HOST_TOPOLOGY_ALERT_SIGNATURE');
 }
 
 function setServerOffline_(serverKey, hours, reason) {
@@ -1137,6 +1192,19 @@ function suspendAllExcept_(activeKey) {
   invalidateServerInventory_();
 }
 
+function isRenderSuspended_(service) {
+  const value = service && service.suspended;
+  return value === true || String(value || '').toLowerCase() === 'suspended';
+}
+
+function setRenderSuspended_(server, shouldSuspend) {
+  const decoded = renderRequest_(server, '/services/' + encodeURIComponent(server.serviceId), 'get', null, [200]).data;
+  const service = decoded.service || decoded;
+  const suspended = isRenderSuspended_(service);
+  if (shouldSuspend && !suspended) renderRequest_(server, '/services/' + encodeURIComponent(server.serviceId) + '/suspend', 'post', null, [202]);
+  if (!shouldSuspend && suspended) renderRequest_(server, '/services/' + encodeURIComponent(server.serviceId) + '/resume', 'post', null, [202]);
+}
+
 function enforceStandbySuspension_() {
   try {
     const inventory = getServerInventory_(false);
@@ -1160,10 +1228,19 @@ function deleteRenderDomain_(server, domain) {
 }
 
 function ensureRenderDomain_(server, domain) {
-  const created = renderRequest_(server, '/services/' + encodeURIComponent(server.serviceId) + '/custom-domains', 'post', {name:domain}, [201,409]);
-  if (created.statusCode === 409) {
-    renderRequest_(server, '/services/' + encodeURIComponent(server.serviceId) + '/custom-domains/' + encodeURIComponent(domain), 'get', null, [200]);
+  let lastError = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const created = renderRequest_(server, '/services/' + encodeURIComponent(server.serviceId) + '/custom-domains', 'post', {name:domain}, [201,409]);
+    if (created.statusCode === 201) return;
+    try {
+      renderRequest_(server, '/services/' + encodeURIComponent(server.serviceId) + '/custom-domains/' + encodeURIComponent(domain), 'get', null, [200]);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) Utilities.sleep(2000);
+    }
   }
+  throw lastError || new Error('Render did not attach custom domain ' + domain + '.');
 }
 
 function updateCloudflareRecord_(hostname, target) {
@@ -1180,6 +1257,18 @@ function getCloudflareDnsRecord_(hostname) {
   const records = response.result || [];
   if (!records.length) throw new Error('Cloudflare CNAME record not found for ' + hostname + '.');
   return records[0];
+}
+
+function verifyCloudflareTargets_(expectedTarget) {
+  expectedTarget = normalizeHostname_(expectedTarget);
+  HOST_CONFIG.DOMAINS.forEach(function (domain) {
+    const actual = normalizeHostname_(getCloudflareDnsRecord_(domain).content);
+    if (actual !== expectedTarget) throw new Error('Cloudflare did not update ' + domain + ': expected ' + expectedTarget + ', received ' + (actual || 'no target') + '.');
+  });
+}
+
+function normalizeHostname_(value) {
+  return String(value || '').trim().toLowerCase().replace(/^https?:\/\//,'').replace(/[\/.]+$/,'');
 }
 
 function renderRequest_(server, path, method, body, acceptedCodes) {

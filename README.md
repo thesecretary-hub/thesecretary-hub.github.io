@@ -135,6 +135,26 @@ RENDER_OHIO_API_KEY
 
 `SUPABASE_PUBLISHABLE_KEY` is the browser-safe publishable key. `SUPABASE_URL` is the same Project URL used in `site/assets/config.js`.
 
+The host controller uses this fixed Render routing map:
+
+```text
+virginia      -> the-secretary.onrender.com
+singapore_n2  -> the-secretary-c8eg.onrender.com
+singapore_n1  -> the-secretary-1iwz.onrender.com
+frankfurt     -> the-secretary-uu6w.onrender.com
+ohio          -> the-secretary-ohio-us.onrender.com
+```
+
+Outside an active switch, both `thesecretary.xyz` and `www.thesecretary.xyz`
+must point to the same hostname as the single resumed Render service. A mismatch
+stops automatic host changes and sends one deduplicated emergency email. Suspended
+services are healthy standbys; an exclusion only removes a standby from automatic
+selection and does not create a public outage.
+
+After upgrading from the older controller, open `/admin/servers/` and clear any
+incorrect exclusion created by a failed pre-cutover attempt. In particular, clear
+Virginia if it was excluded even though Cloudflare never pointed traffic to it.
+
 3. Remove the retired `API_SECRET` Script Property after rotating it. It is no longer used by 4.0.
 4. Run `setupStatusBackend()` only if this is a new Apps Script project. Existing installations keep their current spreadsheet and triggers.
 5. Select **Deploy → Manage deployments**, edit the existing web app, select **New version**, then deploy.

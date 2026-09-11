@@ -1,7 +1,7 @@
 export const APP_CONFIG = Object.freeze({
   siteUrl: 'https://hub.thesecretary.xyz',
   mainSiteUrl: 'https://thesecretary.xyz/',
-  appsScriptUrl: 'https://script.google.com/macros/s/AKfycbwisZgEwbwEqM3Db-DIPOTCnbpdj1BhxtfLbFfPCYyM00LeKOhXfJiA4qDiy7w72b0fdg/exec',
+  appsScriptUrl: 'https://script.google.com/macros/s/AKfycbxKto5pHqnpiqoclp5JdBp8ZbkYZPy3OlB4v7NUI07gvUcD0-dK8l8utuzaYTu_JWNKxA/exec',
   authScriptUrl: 'https://script.google.com/macros/s/AKfycbxhNpTz-XNO8y2ucbGmlwNqWJla9JOM7hqR848S4Y2J9kOC2xzQDeE2nQ_ZTx0mSn-p/exec',
 
   supabaseUrl: 'https://ubxgpkjuzkwlewofxmfy.supabase.co',
