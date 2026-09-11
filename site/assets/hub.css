@@ -12,7 +12,7 @@
 
 /* Full-width updates subscription feature. */
 .updates-area{padding:0 0 140px;background:#000}
-.updates-area .updates-signup{grid-template-columns:minmax(320px,.95fr) minmax(430px,1.05fr);gap:8vw;width:min(1160px,calc(100% - 80px));padding:145px 0 125px}
+.updates-area .updates-signup{grid-template-columns:minmax(320px,.95fr) minmax(430px,1.05fr);align-items:center;gap:8vw;width:min(1160px,calc(100% - 80px));min-height:100vh;padding:110px 0}
 .updates-area .updates-brand{font-size:clamp(60px,6vw,92px);font-weight:760;line-height:.88;letter-spacing:-.07em}
 .updates-area .updates-copy h2{font-size:clamp(31px,3vw,45px)}
 .updates-area .updates-copy p{max-width:620px;font-size:17px;line-height:1.55}
@@ -36,8 +36,8 @@
 .updates-dialog-submit:disabled{cursor:wait;opacity:.6}
 .updates-dialog-form>[data-dialog-status]{min-height:18px;margin-top:13px;color:#b3b3ba;font-size:11px;text-align:center}
 .updates-dialog-close{position:absolute;top:18px;right:18px;width:38px;height:38px;border:1px solid #424249;border-radius:50%;background:#151519;color:#fff;font-size:23px;cursor:pointer}
-@media(max-width:960px){.updates-area .updates-signup{grid-template-columns:1fr;width:min(700px,calc(100% - 72px));gap:48px;padding:115px 0 95px}.updates-area{padding-bottom:110px}.updates-banner{width:calc(100% - 72px)}}
-@media(max-width:640px){.updates-area{padding-bottom:80px}.updates-area .updates-signup{width:calc(100% - 40px);padding:85px 0 70px;gap:36px}.updates-area .updates-brand{font-size:50px}.updates-area .updates-copy h2{font-size:32px}.updates-area .updates-copy p{font-size:15px}.updates-banner{width:calc(100% - 40px)}.updates-banner img{min-height:44px}.updates-dialog-form{padding:34px 22px 24px}.updates-dialog-form h2{font-size:36px}}
+@media(max-width:960px){.updates-area .updates-signup{grid-template-columns:1fr;align-content:center;width:min(700px,calc(100% - 72px));min-height:100svh;gap:48px;padding:80px 0}.updates-area{padding-bottom:110px}.updates-banner{width:calc(100% - 72px)}}
+@media(max-width:640px){.updates-area{padding-bottom:80px}.updates-area .updates-signup{width:calc(100% - 40px);min-height:100svh;padding:70px 0;gap:36px}.updates-area .updates-brand{font-size:50px}.updates-area .updates-copy h2{font-size:32px}.updates-area .updates-copy p{font-size:15px}.updates-banner{width:calc(100% - 40px)}.updates-banner img{min-height:44px}.updates-dialog-form{padding:34px 22px 24px}.updates-dialog-form h2{font-size:36px}}
 
 /* Hub quality-of-life pass: roomier drawer, directional hero motion, and video controls. */
 .hub-header.drawer-open{height:min(640px,82vh)}
