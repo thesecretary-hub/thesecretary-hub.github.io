@@ -100,7 +100,10 @@ function route_(action, data, isPost) {
       case 'content': result = contentPayload_(data.type, data.slug); break;
       case 'subscribe': result = subscribe_(data.email); break;
       case 'unsubscribe': result = unsubscribe_(data.token); break;
-      case 'check_now': runScheduledChecks(); result = {ok: true}; break;
+      case 'check_now':
+        result = runScheduledChecks();
+        if (result && result.skipped) throw new Error('A monitoring run is already in progress. Wait a moment and try again.');
+        break;
       case 'send_otp': result = sendOtp_(data.code); break;
       case 'update_settings': result = updateSettings_(data); break;
       case 'create_incident': result = createIncident_(data, false); break;
@@ -134,18 +137,25 @@ function route_(action, data, isPost) {
 
 function runScheduledChecks() {
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(2000)) return;
+  if (!lock.tryLock(2000)) return {skipped: true};
   try {
     initializeSheets_();
     const settings = getSettings_();
     updateMaintenanceStates_(settings);
     const http = probeHttp_(settings.targetUrl);
-    const discord = probeDiscord_('https://thesecretary.xyz/api/status/discord');
+    const discord = probeDiscord_(settings.discordStatusUrl);
     appendCheck_(http, discord);
+    abortRecoveredPreCutoverSwitch_(http);
     processHttpTransition_(http, settings);
     processDiscordTransition_(discord, settings);
     processHostAutomation_(http, discord, settings);
     pruneChecks_();
+    return {
+      checkedAt: http.checkedAt,
+      http: {up: http.up, statusCode: http.statusCode, responseMs: http.responseMs, error: http.error || ''},
+      discord: {state: discord.state, rateLimited: discord.rateLimited, error: discord.error || ''},
+      hostSwitch: sanitizeSwitchState_(getHostSwitchState_())
+    };
   } finally {
     lock.releaseLock();
   }
@@ -167,10 +177,18 @@ function probeDiscord_(url) {
     const response = UrlFetchApp.fetch(url, {muteHttpExceptions: true, followRedirects: true, headers: {'User-Agent': 'TheSecretaryStatus/2.0'}});
     const payload = JSON.parse(response.getContentText() || '{}');
     const rateLimited = Boolean(payload.rate_limited || payload.global_rate_limit || payload.discord_http_global_blocked || Number(payload.http_status) === 429 || response.getResponseCode() === 429);
-    const state = rateLimited ? 'rate_limited' : response.getResponseCode() >= 200 && response.getResponseCode() < 300 ? 'operational' : 'unknown';
-    return {rateLimited:rateLimited,state:state,checkedAt:payload.checked_at||new Date().toISOString(),gatewayLatencyMs:Number(payload.gateway_latency_ms),responseMs:Number(payload.response_ms),nextCheckAt:payload.next_check_at||null,raw:payload};
+    const httpOk = response.getResponseCode() >= 200 && response.getResponseCode() < 300;
+    const reportedState = String(payload.state || '').trim().toLowerCase();
+    let state = 'unknown';
+    if (rateLimited) state = 'rate_limited';
+    else if (httpOk && payload.bot_ready === false) state = 'unavailable';
+    else if (httpOk && ['operational','normal','ok','none'].indexOf(reportedState) >= 0) state = 'operational';
+    else if (httpOk && ['degraded','minor'].indexOf(reportedState) >= 0) state = 'degraded';
+    else if (httpOk && reportedState && reportedState !== 'pending') state = reportedState;
+    else if (httpOk && payload.bot_ready === true) state = 'operational';
+    return {rateLimited:rateLimited,state:state,botReady:payload.bot_ready===true,checkedAt:payload.checked_at||new Date().toISOString(),gatewayLatencyMs:Number(payload.gateway_latency_ms),responseMs:Number(payload.response_ms),nextCheckAt:payload.next_check_at||null,raw:payload};
   } catch (error) {
-    return {rateLimited: false, state: 'unknown', checkedAt: new Date().toISOString(), error: error.message || String(error)};
+    return {rateLimited: false, state: 'unknown', botReady: false, checkedAt: new Date().toISOString(), error: error.message || String(error)};
   }
 }
 
@@ -677,6 +695,21 @@ function editMaintenance_(data) {
   return{item:item};
 }
 
+// A brief outage can recover while the standby deployment is still preparing.
+// In that case no traffic has moved, so continuing the switch only keeps the
+// public incident open and risks an unnecessary cutover.
+function abortRecoveredPreCutoverSwitch_(http) {
+  if (!http.up) return false;
+  const state = getHostSwitchState_();
+  if (!state || state.mode !== 'automatic' || ['preparing','waiting_deploy'].indexOf(state.phase) < 0) return false;
+  writeHostSwitchLog_(state, 'cancelled', 'Automatic switch cancelled because the active service recovered before traffic moved.');
+  PropertiesService.getScriptProperties().deleteProperty('HOST_SWITCH_STATE');
+  invalidateServerInventory_();
+  try { enforceStandbySuspension_(); }
+  catch (error) { console.error('Recovered switch cleanup failed: ' + (error.message || String(error))); }
+  return true;
+}
+
 function startAutomaticHostSwitch_(reason) {
   const inventory = refreshServerInventory_();
   const activeKey = discoverActiveServerKey_(inventory);
@@ -900,7 +933,10 @@ function enterHostEmergency_(state, reason) {
 
 function hostSwitchBlocksRecovery_() {
   const state = getHostSwitchState_();
-  return Boolean(state && ['preparing','waiting_deploy','cutover','validating'].indexOf(state.phase) >= 0);
+  // Once cutover completes, the public endpoint is the validation target. A
+  // successful probe is real recovery even though the longer infrastructure
+  // validation continues in the background.
+  return Boolean(state && ['preparing','waiting_deploy','cutover'].indexOf(state.phase) >= 0);
 }
 
 function getHostSwitchState_() {
