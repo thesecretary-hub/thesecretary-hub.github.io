@@ -91,7 +91,9 @@ function doPost(e) { return route_(String((e.parameter || {}).action || ''), e.p
 function route_(action, data, isPost) {
   try {
     initializeSheets_();
-    if (['status', 'archive', 'content', 'subscribe', 'unsubscribe'].indexOf(action) === -1) requireAdmin_(data.access_token);
+    let accountUser = null;
+    if (['subscription_status', 'toggle_account_subscription'].indexOf(action) >= 0) accountUser = requireUser_(data.access_token);
+    else if (['status', 'archive', 'content', 'subscribe', 'unsubscribe'].indexOf(action) === -1) requireAdmin_(data.access_token);
     let result;
     switch (action) {
       case 'status': result = statusPayload_(false); break;
@@ -100,6 +102,8 @@ function route_(action, data, isPost) {
       case 'content': result = contentPayload_(data.type, data.slug); break;
       case 'subscribe': result = subscribe_(data.email); break;
       case 'unsubscribe': result = unsubscribe_(data.token); break;
+      case 'subscription_status': result = subscriptionStatus_(accountUser.email); break;
+      case 'toggle_account_subscription': result = toggleAccountSubscription_(accountUser.email); break;
       case 'check_now':
         result = runScheduledChecks();
         if (result && result.skipped) throw new Error('A monitoring run is already in progress. Wait a moment and try again.');
@@ -488,6 +492,8 @@ function contentPayload_(type,slug) { const map={incident:'incidents',maintenanc
 
 function subscribe_(email) { email=String(email||'').trim().toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))throw new Error('Valid email required.');const sheet=getSheet_('subscribers');const rows=sheet.getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][0]).toLowerCase()===email){sheet.getRange(i+1,3).setValue(true);return{};}}const token=Utilities.getUuid().replace(/-/g,'');sheet.appendRow([email,token,true,new Date().toISOString()]);MailApp.sendEmail({to:email,subject:'Subscribed to The Secretary status',body:'You will now receive operational alerts and system posts from The Secretary.',htmlBody:'<p>You will now receive operational alerts and system posts from The Secretary.</p><p><a href="'+STATUS_CONFIG.SITE_URL+'/unsubscribe/?token='+token+'">Unsubscribe</a></p>'});return{}; }
 function unsubscribe_(token) { const sheet=getSheet_('subscribers');const rows=sheet.getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][1])===String(token)){sheet.getRange(i+1,3).setValue(false);return{};}}throw new Error('Subscription not found.'); }
+function subscriptionStatus_(email) { email=String(email||'').trim().toLowerCase();const rows=getSheet_('subscribers').getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][0]).toLowerCase()===email)return{subscribed:rows[i][2]===true||String(rows[i][2]).toLowerCase()==='true'};}return{subscribed:false}; }
+function toggleAccountSubscription_(email) { email=String(email||'').trim().toLowerCase();const sheet=getSheet_('subscribers');const rows=sheet.getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][0]).toLowerCase()===email){const active=rows[i][2]===true||String(rows[i][2]).toLowerCase()==='true';sheet.getRange(i+1,3).setValue(!active);return{subscribed:!active};}}subscribe_(email);return{subscribed:true}; }
 function sendOtp_(code) { code=String(code||'').trim();if(!/^\d{6}$/.test(code))throw new Error('Invalid sign-in code.');MailApp.sendEmail({to:STATUS_CONFIG.ADMIN_EMAIL,subject:'The Secretary Status sign-in code',body:'Your sign-in code is '+code+'. It expires in 10 minutes.',htmlBody:'<div style="font-family:Arial,sans-serif;background:#080808;color:#fff;padding:28px"><p style="color:#f2eb00;font-weight:bold">THE SECRETARY STATUS</p><h2>Your sign-in code</h2><p style="font-size:34px;letter-spacing:8px;font-weight:bold">'+code+'</p><p>This code expires in 10 minutes. If you did not request it, ignore this message.</p></div>'});return{}; }
 
 function notifyEvent_(event, item, settings, channels) {
@@ -1492,9 +1498,22 @@ function validHttps_(value) { value=String(value||'').trim();if(!/^https:\/\//i.
 function validWebhook_(value) { value=String(value||'').trim();if(value&&!/^https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\//i.test(value))throw new Error('Invalid Discord webhook URL.');return value; }
 function capitalize_(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
 function escapeHtml_(s) { return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function requireUser_(accessToken) {
+  accessToken = String(accessToken || '').trim();
+  if (!accessToken) throw new Error('Login required.');
+  const props = PropertiesService.getScriptProperties();
+  const baseUrl = String(props.getProperty('SUPABASE_URL') || '').replace(/\/$/, '');
+  const publishableKey = String(props.getProperty('SUPABASE_PUBLISHABLE_KEY') || '');
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(baseUrl) || !publishableKey) throw new Error('Account verification is not configured.');
+  const response = UrlFetchApp.fetch(baseUrl + '/auth/v1/user', {headers:{apikey:publishableKey,Authorization:'Bearer ' + accessToken},muteHttpExceptions:true});
+  if (response.getResponseCode() !== 200) throw new Error('Your login session is invalid or expired.');
+  const user = JSON.parse(response.getContentText() || '{}');
+  if (!user.id || !user.email) throw new Error('Your account email could not be verified.');
+  return user;
+}
 function requireAdmin_(accessToken) {
   accessToken = String(accessToken || '').trim();
-  if (!accessToken) throw new Error('Administrator login required.');
+  const user = requireUser_(accessToken);
   const props = PropertiesService.getScriptProperties();
   const baseUrl = String(props.getProperty('SUPABASE_URL') || '').replace(/\/$/, '');
   const publishableKey = String(props.getProperty('SUPABASE_PUBLISHABLE_KEY') || '');
@@ -1502,9 +1521,6 @@ function requireAdmin_(accessToken) {
     throw new Error('Supabase administrator verification is not configured.');
   }
   const headers = {apikey: publishableKey, Authorization: 'Bearer ' + accessToken};
-  const userResponse = UrlFetchApp.fetch(baseUrl + '/auth/v1/user', {headers: headers, muteHttpExceptions: true});
-  if (userResponse.getResponseCode() !== 200) throw new Error('Administrator session is invalid or expired.');
-  const user = JSON.parse(userResponse.getContentText() || '{}');
   if (!user.id || String(user.email || '').toLowerCase() !== STATUS_CONFIG.ADMIN_EMAIL.toLowerCase()) {
     throw new Error('This account is not authorized for the control room.');
   }

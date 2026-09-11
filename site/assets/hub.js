@@ -1,12 +1,43 @@
-import { mountLayout } from './layout.js?v=4.5.0';
+import { mountLayout, showToast } from './layout.js?v=4.5.0';
 import { FALLBACK_POST, getPublishedPosts, postDate, postHref } from './post-store.js';
+import { currentAccount } from './supabase-client.js';
+import { statusApi } from './api.js';
 
 await mountLayout('hub');
+const {user:accountUser}=await currentAccount();
 
 const esc = (value = '') => String(value).replace(/[&<>'"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
 const prettyDate = (post) => { const date = new Date(postDate(post)); return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(date) : 'Recently'; };
 const fallbackSet = (count) => Array.from({ length: count }, (_, index) => ({ ...FALLBACK_POST, id: `fallback-${index}` }));
 const image = (post, kind) => post?.[kind] || (kind === 'poster_url' ? FALLBACK_POST.poster_url : FALLBACK_POST.full_thumb_url);
+
+async function setupUpdatesSubscription(){
+  const button=document.querySelector('[data-updates-subscribe]');
+  const status=document.querySelector('[data-updates-status]');
+  if(!button)return;
+  let subscribed=false;
+  const sync=()=>{button.textContent=accountUser?(subscribed?'Unsubscribe':'Subscribe Now'):'Subscribe Now';button.setAttribute('aria-pressed',String(subscribed));status.textContent=accountUser?(subscribed?`Email updates are enabled for ${accountUser.email}.`:`Email updates are disabled for ${accountUser.email}.`):'';};
+  if(accountUser){
+    button.disabled=true;status.textContent='Checking your subscription…';
+    try{subscribed=Boolean((await statusApi('subscription_status')).subscribed);sync();}
+    catch(error){status.textContent='Could not check your subscription right now.';console.warn(error);}
+    finally{button.disabled=false;}
+    button.addEventListener('click',async()=>{button.disabled=true;try{subscribed=Boolean((await statusApi('toggle_account_subscription')).subscribed);sync();showToast(subscribed?'Email updates enabled.':'Email updates disabled.',subscribed?'success':'info');}catch(error){showToast(error.message,'error');}finally{button.disabled=false;}});
+    return;
+  }
+  button.addEventListener('click',()=>openEmailSubscriptionDialog());
+}
+
+function openEmailSubscriptionDialog(){
+  if(document.querySelector('[data-updates-dialog]'))return;
+  const dialog=document.createElement('dialog');dialog.className='updates-dialog';dialog.dataset.updatesDialog='';
+  dialog.innerHTML=`<form method="dialog" class="updates-dialog-form"><button class="updates-dialog-close" type="button" aria-label="Close">×</button><span>THE SECRETARY UPDATES</span><h2>Stay in the loop.</h2><p>Enter your email to receive new posts, announcements, and important service updates.</p><label>Email address<input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label><button class="updates-dialog-submit" type="submit">Subscribe</button><small data-dialog-status role="status"></small></form>`;
+  document.body.append(dialog);dialog.showModal();dialog.querySelector('input').focus();
+  const close=()=>dialog.close();dialog.querySelector('.updates-dialog-close').onclick=close;dialog.onclick=event=>{if(event.target===dialog)close();};dialog.onclose=()=>dialog.remove();
+  dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget,submit=form.querySelector('[type=submit]'),message=form.querySelector('[data-dialog-status]');submit.disabled=true;message.textContent='Subscribing…';try{await statusApi('subscribe',{email:new FormData(form).get('email')});message.textContent='Subscribed. Check your inbox for confirmation.';submit.textContent='Done';setTimeout(close,1100);}catch(error){message.textContent=error.message;submit.disabled=false;}};
+}
+
+setupUpdatesSubscription();
 
 function renderDrawer(posts) {
   document.querySelector('[data-drawer-posts]').innerHTML = posts.slice(0, 5).map((post) => `<a class="drawer-card" href="${postHref(post)}"><img src="${esc(image(post, 'poster_url'))}" alt=""><span><small>${esc(prettyDate(post))}</small><strong>${esc(post.title)}</strong></span></a>`).join('');

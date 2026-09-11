@@ -33,9 +33,10 @@ try {
     document.body.classList.add('post-reading-mode');
     const readerStyle = document.createElement('link');
     readerStyle.rel = 'stylesheet';
-    readerStyle.href = '/assets/post-reader.css?v=1.1.0';
+    readerStyle.href = '/assets/post-reader.css?v=1.2.0';
     document.head.append(readerStyle);
     root.innerHTML = `<main class="post-story-page"><article class="post-story"><img class="post-story-hero" src="${esc(item.full_thumb_url || '/assets/images/post-fallback-full.webp')}" alt=""><header class="post-story-header"><div class="post-story-tag">Posts <span>/</span> The Secretary</div><h1>${esc(item.title)}</h1>${item.excerpt ? `<p>${esc(item.excerpt)}</p>` : ''}<time>${formatDate(item.published_at, { dateStyle: 'long' })}</time></header><div class="post-story-body rich-content">${safeRichHtml(item.content_html || '')}</div></article></main>`;
+    bindPostImageLightbox();
   } else {
     const source = type === 'incident' ? item.source === 'discord' ? 'Discord API' : item.source === 'http' ? 'TheSecretary.xyz' : 'The Secretary' : 'The Secretary';
     let rows = [];
@@ -52,3 +53,42 @@ try {
     root.innerHTML = `<main class="status-detail-page ${type}-detail"><nav><a href="/status/">← Status</a></nav><article><header><h1>${esc(item.title)}</h1><p>${type === 'incident' ? 'Incident report for' : 'Maintenance report for'} ${esc(source)}</p></header><section class="status-detail-timeline">${rows.map(row => `<div class="status-detail-row"><h2>${esc(row.label)}</h2><div><p>${esc(row.message)}</p><time>Posted ${formatDate(row.time, {dateStyle:'medium',timeStyle:'short'})}</time></div></div>`).join('')}</section></article></main>`;
   }
 } catch (error) { root.innerHTML = `<main class="container page"><section class="not-found-panel"><span class="eyebrow">404</span><h1>Page unavailable</h1><p>${esc(error.message)}</p><a class="button primary" href="/">Return home</a></section></main>`; }
+
+function bindPostImageLightbox() {
+  root.querySelectorAll('.post-story img').forEach(image => {
+    image.tabIndex = 0;
+    image.setAttribute('role', 'button');
+    image.setAttribute('aria-label', image.alt ? `Open image: ${image.alt}` : 'Open image full screen');
+    image.addEventListener('click', event => { event.preventDefault(); openPostImage(image); });
+    image.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openPostImage(image); }
+    });
+  });
+}
+
+function openPostImage(source) {
+  if (document.querySelector('.post-image-lightbox')) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'post-image-lightbox';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Expanded post image');
+  overlay.innerHTML = `<img src="${esc(source.currentSrc || source.src)}" alt="${esc(source.alt || '')}"><button type="button" aria-label="Close expanded image">×</button>`;
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  document.body.append(overlay);
+  requestAnimationFrame(() => overlay.classList.add('is-open'));
+  const close = () => {
+    if (overlay.classList.contains('is-closing')) return;
+    document.removeEventListener('keydown', onKey);
+    overlay.classList.add('is-closing');
+    overlay.classList.remove('is-open');
+    const finish = () => { overlay.remove(); document.body.style.overflow = previousOverflow; source.focus({preventScroll:true}); };
+    overlay.addEventListener('transitionend', finish, {once:true});
+    setTimeout(() => overlay.isConnected && finish(), 360);
+  };
+  overlay.addEventListener('click', close);
+  const onKey = event => { if (event.key === 'Escape') { document.removeEventListener('keydown', onKey); close(); } };
+  document.addEventListener('keydown', onKey);
+  overlay.querySelector('button').focus({preventScroll:true});
+}
