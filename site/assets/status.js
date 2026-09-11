@@ -1,5 +1,6 @@
 import { statusApi } from './api.js?v=6.5.0';
 import { esc, formatDate, mountLayout } from './layout.js?v=4.5.0';
+import { currentAccount } from './supabase-client.js';
 
 const mobileHistory = matchMedia('(max-width: 700px)');
 const historyDays = () => mobileHistory.matches ? 30 : 90;
@@ -156,7 +157,7 @@ function drawChart(data, range = 'day') {
   svg.onpointerleave = () => { dot.hidden = true; halo.hidden = true; guide.hidden = true; tooltip.hidden = true; };
 }
 
-function render(data) {
+function render(data, accountUser) {
   const monitor = data.monitor || {};
   const discordState = data.discordApi?.rateLimited ? 'outage' : ['operational','normal','ok','none'].includes(data.discordApi?.state) ? 'operational' : data.discordApi?.state === 'degraded' || data.discordApi?.state === 'minor' ? 'degraded' : !data.discordApi?.state || data.discordApi.state === 'unknown' ? 'unknown' : 'outage';
   const services = [{name:'TheSecretary.xyz Website',kind:'website',state:monitor.status || 'unknown',uptime:monitor.uptime?.['90']},{name:'The Secretary™ Discord',kind:'discord',state:discordState,uptime:null},...((data.servers?.length ? data.servers : defaultServers).map((server) => ({...server,kind:'server',state:server.status || 'operational'})))];
@@ -186,7 +187,7 @@ function render(data) {
   });
   root.querySelector('.service-list').addEventListener('pointerleave', () => tooltip.classList.remove('visible'));
   const dialog = root.querySelector('[data-status-subscribe-dialog]');
-  root.querySelector('[data-subscribe-open]').onclick = () => dialog.showModal();
+  const subscribeButton = root.querySelector('[data-subscribe-open]');
   root.querySelector('[data-subscribe-close]').onclick = () => dialog.close();
   root.querySelector('[data-status-subscribe-form]').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -198,12 +199,20 @@ function render(data) {
     catch (error) { message.textContent = error.message; }
     finally { button.disabled = false; }
   });
+  if(accountUser){
+    let subscribed=false;
+    const sync=()=>{subscribeButton.textContent=subscribed?'Unsubscribe from updates':'Subscribe to updates';subscribeButton.setAttribute('aria-pressed',String(subscribed));};
+    subscribeButton.disabled=true;subscribeButton.textContent='Checking subscription…';
+    statusApi('subscription_status').then(result=>{subscribed=Boolean(result.subscribed);sync();}).catch(error=>{subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Subscription unavailable';subscribeButton.title=error.message;}).finally(()=>{subscribeButton.disabled=false;});
+    subscribeButton.onclick=async()=>{subscribeButton.disabled=true;try{subscribed=Boolean((await statusApi('toggle_account_subscription')).subscribed);sync();}catch(error){subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Try subscription again';subscribeButton.title=error.message;}finally{subscribeButton.disabled=false;}};
+  }else subscribeButton.onclick = () => dialog.showModal();
   drawChart(data);
 }
 
 async function load() {
   await mountLayout('status');
-  try { render(await statusApi('status')); }
+  const {user:accountUser}=await currentAccount();
+  try { render(await statusApi('status'),accountUser); }
   catch (error) { root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-load-error"><h1>Status data is temporarily unavailable.</h1><p>${esc(error.message)}</p><button data-retry>Retry</button></div></div></main>`; root.querySelector('[data-retry]').onclick = load; }
 }
 

@@ -33,7 +33,7 @@ try {
     document.body.classList.add('post-reading-mode');
     const readerStyle = document.createElement('link');
     readerStyle.rel = 'stylesheet';
-    readerStyle.href = '/assets/post-reader.css?v=1.2.0';
+    readerStyle.href = '/assets/post-reader.css?v=1.2.1';
     document.head.append(readerStyle);
     root.innerHTML = `<main class="post-story-page"><article class="post-story"><img class="post-story-hero" src="${esc(item.full_thumb_url || '/assets/images/post-fallback-full.webp')}" alt=""><header class="post-story-header"><div class="post-story-tag">Posts <span>/</span> The Secretary</div><h1>${esc(item.title)}</h1>${item.excerpt ? `<p>${esc(item.excerpt)}</p>` : ''}<time>${formatDate(item.published_at, { dateStyle: 'long' })}</time></header><div class="post-story-body rich-content">${safeRichHtml(item.content_html || '')}</div></article></main>`;
     bindPostImageLightbox();
@@ -74,16 +74,22 @@ function openPostImage(source) {
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', 'Expanded post image');
   overlay.innerHTML = `<img src="${esc(source.currentSrc || source.src)}" alt="${esc(source.alt || '')}"><button type="button" aria-label="Close expanded image">×</button>`;
-  const previousOverflow = document.body.style.overflow;
-  document.body.style.overflow = 'hidden';
+  const scrollKeys = new Set(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' ']);
+  const stopScroll = event => { if (event.type !== 'keydown' || scrollKeys.has(event.key)) event.preventDefault(); };
+  document.addEventListener('wheel', stopScroll, {passive:false});
+  document.addEventListener('touchmove', stopScroll, {passive:false});
+  document.addEventListener('keydown', stopScroll);
   document.body.append(overlay);
   requestAnimationFrame(() => overlay.classList.add('is-open'));
   const close = () => {
     if (overlay.classList.contains('is-closing')) return;
     document.removeEventListener('keydown', onKey);
+    document.removeEventListener('wheel', stopScroll);
+    document.removeEventListener('touchmove', stopScroll);
+    document.removeEventListener('keydown', stopScroll);
     overlay.classList.add('is-closing');
     overlay.classList.remove('is-open');
-    const finish = () => { overlay.remove(); document.body.style.overflow = previousOverflow; source.focus({preventScroll:true}); };
+    const finish = () => { overlay.remove(); source.focus({preventScroll:true}); };
     overlay.addEventListener('transitionend', finish, {once:true});
     setTimeout(() => overlay.isConnected && finish(), 360);
   };

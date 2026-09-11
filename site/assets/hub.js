@@ -20,7 +20,7 @@ async function setupUpdatesSubscription(){
   if(accountUser){
     button.disabled=true;status.textContent='Checking your subscription…';
     try{subscribed=Boolean((await statusApi('subscription_status')).subscribed);sync();}
-    catch(error){status.textContent='Could not check your subscription right now.';console.warn(error);}
+    catch(error){status.textContent=/unknown action/i.test(error.message)?'The email backend needs its latest deployment.':'Could not check your subscription right now.';console.warn(error);}
     finally{button.disabled=false;}
     button.addEventListener('click',async()=>{button.disabled=true;try{subscribed=Boolean((await statusApi('toggle_account_subscription')).subscribed);sync();showToast(subscribed?'Email updates enabled.':'Email updates disabled.',subscribed?'success':'info');}catch(error){showToast(error.message,'error');}finally{button.disabled=false;}});
     return;
