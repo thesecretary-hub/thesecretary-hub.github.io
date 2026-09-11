@@ -655,14 +655,19 @@ function processHostAutomation_(http, discord, settings) {
     return;
   }
 
+  let topology;
   try {
-    const topology = inspectHostTopology_(getServerRuntimeStates_());
-    if (!topology.consistent) throw new Error(topology.error);
-    clearHostTopologyEmergency_();
+    topology = inspectHostTopology_(getServerRuntimeStates_());
   } catch (error) {
-    reportHostTopologyEmergency_(error.message || String(error));
+    noteHostTopologyUnavailable_(error.message || String(error));
     return;
   }
+  clearHostTopologyUnavailable_();
+  if (!topology.consistent) {
+    noteHostTopologyMismatch_(topology.error);
+    return;
+  }
+  clearHostTopologyEmergency_();
 
   const props = PropertiesService.getScriptProperties();
   const failureActive = props.getProperty('HTTP_DOWN') === '1' || props.getProperty('DISCORD_LIMITED') === '1';
@@ -707,7 +712,7 @@ function editMaintenance_(data) {
 
 function startAutomaticHostSwitch_(reason) {
   const inventory = refreshServerInventory_();
-  const activeKey = requireConsistentActiveServer_(inventory);
+  const activeKey = requireConsistentActiveServer_(getServerRuntimeStates_());
   const candidate = selectBestServer_(inventory, [activeKey]);
   if (!candidate) throw new Error('No eligible standby server is available.');
   const now = new Date().toISOString();
@@ -743,7 +748,7 @@ function manualHostSwitch_(serverKey, reason) {
   if (Date.now() < retryAt) throw new Error('Manual host switches are limited to one every 20 minutes. Try again after ' + new Date(retryAt).toISOString() + '.');
 
   const inventory = refreshServerInventory_();
-  const activeKey = requireConsistentActiveServer_(inventory);
+  const activeKey = requireConsistentActiveServer_(getServerRuntimeStates_());
   if (activeKey === serverKey) throw new Error('That server is already the active host.');
 
   const now = new Date().toISOString();
@@ -784,13 +789,20 @@ function advanceHostSwitch_(state, http, discord, settings) {
   let topology;
   try { topology = inspectHostTopology_(getServerRuntimeStates_()); }
   catch (error) {
-    reportHostTopologyEmergency_(error.message || String(error));
-    return enterHostEmergency_(state, 'Post-switch topology could not be verified: ' + (error.message || String(error)));
+    noteHostTopologyUnavailable_(error.message || String(error));
+    state.lastError = 'Post-switch topology verification is temporarily unavailable: ' + (error.message || String(error));
+    state.updatedAt = new Date().toISOString();
+    saveHostSwitchState_(state);
+    return;
   }
+  clearHostTopologyUnavailable_();
   if (!topology.consistent || topology.activeKey !== state.targetKey) {
     const topologyError = topology.error || 'Expected ' + state.targetKey + ' to own DNS and be the single resumed Render service.';
-    reportHostTopologyEmergency_(topologyError);
-    return enterHostEmergency_(state, 'Post-switch topology mismatch: ' + topologyError);
+    if (noteHostTopologyMismatch_(topologyError)) return enterHostEmergency_(state, 'Post-switch topology mismatch: ' + topologyError);
+    state.lastError = 'Waiting for a second topology check: ' + topologyError;
+    state.updatedAt = new Date().toISOString();
+    saveHostSwitchState_(state);
+    return;
   }
   clearHostTopologyEmergency_();
   const healthy = Boolean(http.up) && !discord.rateLimited && discord.state === 'operational';
@@ -975,7 +987,7 @@ function getServerAdminPayload_(forceRefresh) {
   const switchState = getHostSwitchState_();
   let topology = null;
   try { topology = inspectHostTopology_(getServerRuntimeStates_()); }
-  catch (error) { topology = {consistent:false,activeKey:'',dnsKey:'',runningKey:'',records:[],runningKeys:[],error:error.message || String(error)}; }
+  catch (error) { topology = {available:false,consistent:null,activeKey:'',dnsKey:'',runningKey:'',records:[],runningKeys:[],error:error.message || String(error)}; }
   const activeKey = topology.consistent ? topology.activeKey : switchState ? (topology.dnsKey || topology.runningKey || switchState.targetKey || switchState.sourceKey || '') : '';
   if (topology.consistent) PropertiesService.getScriptProperties().setProperty('HOST_ACTIVE_KEY', activeKey);
   return {
@@ -1022,7 +1034,7 @@ function refreshServerInventory_() {
     requests.push({url:'https://api.render.com/v1/metrics/bandwidth?startTime=' + encodeURIComponent(monthStart.toISOString()) + '&endTime=' + encodeURIComponent(now.toISOString()) + '&resource=' + encodeURIComponent(server.serviceId),method:'get',headers:headers,muteHttpExceptions:true,followRedirects:true});
     requests.push({url:'https://api.render.com/v1/services/' + encodeURIComponent(server.serviceId) + '/deploys?limit=100&createdAfter=' + encodeURIComponent(monthStart.toISOString()),method:'get',headers:headers,muteHttpExceptions:true,followRedirects:true});
   });
-  const responses = requests.length ? UrlFetchApp.fetchAll(requests) : [];
+  const responses = requests.length ? fetchAllWithRetry_(requests) : [];
   const servers = configured.map(function (server, index) {
     const safe = {key:server.key,name:server.name,region:server.region,serviceId:server.serviceId,hostname:normalizeHostname_(server.hostname),bandwidthLimitGb:server.bandwidthLimitGb,pipelineLimitMinutes:server.pipelineLimitMinutes};
     try {
@@ -1088,6 +1100,8 @@ function requireConsistentActiveServer_(inventory) {
 
 function inspectHostTopology_(inventory) {
   const servers = inventory || [];
+  const inventoryErrors = servers.filter(function (server) { return server.error; });
+  if (inventoryErrors.length) throw new Error('Render state could not be read for ' + inventoryErrors.map(function(server){return server.name + ': ' + server.error;}).join('; ') + '.');
   const records = HOST_CONFIG.DOMAINS.map(function (domain) {
     const record = getCloudflareDnsRecord_(domain);
     return {domain:domain, target:normalizeHostname_(record && record.content)};
@@ -1098,14 +1112,12 @@ function inspectHostTopology_(inventory) {
   const running = servers.filter(function (server) { return !server.error && server.suspended === false; });
   const runningServer = running.length === 1 ? running[0] : null;
   let error = '';
-  const inventoryErrors = servers.filter(function (server) { return server.error; });
-  if (inventoryErrors.length) error = 'Render state could not be read for ' + inventoryErrors.map(function(server){return server.name + ': ' + server.error;}).join('; ') + '.';
-  else if (records.some(function (item) { return !item.target; })) error = 'One or more Cloudflare CNAME records have no target.';
+  if (records.some(function (item) { return !item.target; })) error = 'One or more Cloudflare CNAME records have no target.';
   else if (uniqueTargets.length !== 1) error = 'Cloudflare CNAME records disagree: ' + records.map(function (item) { return item.domain + ' -> ' + (item.target || 'missing'); }).join(', ') + '.';
   else if (!dnsServer) error = 'Cloudflare points to unknown Render hostname ' + uniqueTargets[0] + '.';
   else if (running.length !== 1) error = 'Expected exactly one resumed Render service but found ' + running.length + ': ' + (running.map(function (server) { return server.name; }).join(', ') || 'none') + '.';
   else if (dnsServer.key !== runningServer.key) error = 'Cloudflare points to ' + dnsServer.name + ' while the resumed Render service is ' + runningServer.name + '.';
-  return {consistent:!error, activeKey:!error?dnsServer.key:'', dnsKey:dnsServer?dnsServer.key:'', runningKey:runningServer?runningServer.key:'', records:records, runningKeys:running.map(function(server){return server.key;}), error:error};
+  return {available:true, consistent:!error, activeKey:!error?dnsServer.key:'', dnsKey:dnsServer?dnsServer.key:'', runningKey:runningServer?runningServer.key:'', records:records, runningKeys:running.map(function(server){return server.key;}), error:error};
 }
 
 function getServerRuntimeStates_() {
@@ -1113,8 +1125,8 @@ function getServerRuntimeStates_() {
   const requests = configured.map(function (server) {
     return {url:'https://api.render.com/v1/services/' + encodeURIComponent(server.serviceId),method:'get',headers:{Authorization:'Bearer ' + server.apiKey,Accept:'application/json'},muteHttpExceptions:true,followRedirects:true};
   });
-  const responses = requests.length ? UrlFetchApp.fetchAll(requests) : [];
-  return configured.map(function (server, index) {
+  const responses = requests.length ? fetchAllWithRetry_(requests) : [];
+  const states = configured.map(function (server, index) {
     try {
       const decoded = decodeJsonResponse_(responses[index], [200], 'Render').data;
       const service = decoded.service || decoded;
@@ -1123,10 +1135,26 @@ function getServerRuntimeStates_() {
       return Object.assign({}, server, {hostname:normalizeHostname_(server.hostname),suspended:null,error:error.message || String(error)});
     }
   });
+  const failures = states.filter(function (server) { return server.error; });
+  if (failures.length) throw new Error('Render state is temporarily unavailable for ' + failures.map(function(server){return server.name + ': ' + server.error;}).join('; ') + '.');
+  return states;
+}
+
+function noteHostTopologyMismatch_(message) {
+  message = cleanText_(message, 1000) || 'The active host topology could not be verified.';
+  const props = PropertiesService.getScriptProperties();
+  const signature = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, message)).slice(0, 32);
+  const previous = props.getProperty('HOST_TOPOLOGY_MISMATCH_SIGNATURE');
+  const count = previous === signature ? Number(props.getProperty('HOST_TOPOLOGY_MISMATCH_COUNT') || 0) + 1 : 1;
+  props.setProperties({HOST_TOPOLOGY_MISMATCH_SIGNATURE:signature, HOST_TOPOLOGY_MISMATCH_COUNT:String(count)});
+  console.error('Host topology mismatch observation ' + count + '/2: ' + message);
+  if (count < 2) return false;
+  reportHostTopologyEmergency_(message);
+  return true;
 }
 
 function reportHostTopologyEmergency_(message) {
-  message = cleanText_(message, 1000) || 'The active host topology could not be verified.';
+  message = cleanText_(message, 1000) || 'DNS and Render host state do not match.';
   const props = PropertiesService.getScriptProperties();
   const signature = Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, message)).slice(0, 32);
   props.setProperty('HOST_TOPOLOGY_EMERGENCY', '1');
@@ -1135,10 +1163,30 @@ function reportHostTopologyEmergency_(message) {
   sendAdminHostEmail_('EMERGENCY: DNS and Render host state do not match', message + '\n\nAutomatic host changes have been stopped until DNS and the single resumed Render service match.');
 }
 
+function noteHostTopologyUnavailable_(message) {
+  message = cleanText_(message, 1000) || 'Cloudflare or Render could not be reached.';
+  const props = PropertiesService.getScriptProperties();
+  const count = Number(props.getProperty('HOST_TOPOLOGY_UNAVAILABLE_COUNT') || 0) + 1;
+  props.setProperties({HOST_TOPOLOGY_UNAVAILABLE_COUNT:String(count), HOST_TOPOLOGY_UNAVAILABLE_LAST:message});
+  props.deleteProperty('HOST_TOPOLOGY_MISMATCH_SIGNATURE');
+  props.deleteProperty('HOST_TOPOLOGY_MISMATCH_COUNT');
+  console.error('Host topology verification unavailable (' + count + ' consecutive checks): ' + message);
+  if (count !== 3) return;
+  sendAdminHostEmail_('WARNING: host topology verification is unavailable', message + '\n\nNo DNS/Render mismatch has been confirmed. Automatic host changes are being skipped until both provider APIs can be read successfully.');
+}
+
+function clearHostTopologyUnavailable_() {
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty('HOST_TOPOLOGY_UNAVAILABLE_COUNT');
+  props.deleteProperty('HOST_TOPOLOGY_UNAVAILABLE_LAST');
+}
+
 function clearHostTopologyEmergency_() {
   const props = PropertiesService.getScriptProperties();
   props.deleteProperty('HOST_TOPOLOGY_EMERGENCY');
   props.deleteProperty('HOST_TOPOLOGY_ALERT_SIGNATURE');
+  props.deleteProperty('HOST_TOPOLOGY_MISMATCH_SIGNATURE');
+  props.deleteProperty('HOST_TOPOLOGY_MISMATCH_COUNT');
 }
 
 function setServerOffline_(serverKey, hours, reason) {
@@ -1288,8 +1336,39 @@ function cloudflareRequest_(path, method, body, acceptedCodes) {
 function externalJsonRequest_(url, method, body, headers, acceptedCodes, provider) {
   const options = {method:String(method || 'get').toLowerCase(),muteHttpExceptions:true,followRedirects:true,headers:headers};
   if (body !== null && body !== undefined) { options.contentType = 'application/json'; options.payload = JSON.stringify(body); }
-  const response = UrlFetchApp.fetch(url, options);
-  return decodeJsonResponse_(response, acceptedCodes, provider);
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { return decodeJsonResponse_(UrlFetchApp.fetch(url, options), acceptedCodes, provider); }
+    catch (error) {
+      lastError = error;
+      if (attempt >= 2 || !isRetryableProviderError_(error)) throw error;
+      Utilities.sleep(attempt === 0 ? 500 : 1500);
+    }
+  }
+  throw lastError;
+}
+
+function fetchAllWithRetry_(requests) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const responses = UrlFetchApp.fetchAll(requests);
+      const retryableCodes = responses.map(function(response){return response.getResponseCode();}).filter(function(code){return code === 429 || code >= 500;});
+      if (retryableCodes.length) throw new Error('Provider API returned HTTP ' + retryableCodes.join(', ') + '.');
+      return responses;
+    }
+    catch (error) {
+      lastError = error;
+      if (attempt >= 2 || !isRetryableProviderError_(error)) throw error;
+      Utilities.sleep(attempt === 0 ? 500 : 1500);
+    }
+  }
+  throw lastError;
+}
+
+function isRetryableProviderError_(error) {
+  const message = String(error && error.message || error || '');
+  return /address unavailable|timed?\s*out|timeout|connection|socket|dns|temporar|http\s+(429|5\d\d)\b/i.test(message);
 }
 
 function decodeJsonResponse_(response, acceptedCodes, provider) {
