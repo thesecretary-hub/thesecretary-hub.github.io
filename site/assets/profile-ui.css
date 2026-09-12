@@ -107,5 +107,13 @@ html.identity-scroll-lock,body.identity-scroll-lock{overflow-x:hidden!important;
 @media(prefers-reduced-motion:reduce){.identity-media-layer,.identity-media-layer>*{animation:none!important;transition:none!important}}
 
 
-/* Mobile full profiles use the identity card alone. */
-@media(max-width:720px){.identity-full{position:relative;width:min(320px,calc(100vw - 16px));height:auto;max-height:calc(100dvh - 16px);border-radius:16px;overflow:auto}.identity-full>[data-content]{height:auto}.identity-full-grid{display:block;height:auto;padding:14px;background:#f7f4e9}.identity-full .identity-card{width:100%;height:auto;border-radius:13px}.identity-full .identity-board,.identity-full-banner{display:none}}
+/* Mobile full profiles retain the tall, immersive identity-card composition. */
+@media(max-width:720px){
+ .identity-full{position:relative;width:min(430px,calc(100vw - 8px));height:calc(100dvh - 12px);max-width:none;max-height:none;overflow:hidden;border-radius:15px;background:#09090d}
+ .identity-full>[data-content]{height:100%}
+ .identity-full-grid{display:block;width:100%;height:100%;padding:42px clamp(18px,10vw,40px) 0;background:radial-gradient(ellipse at 90% 4%,color-mix(in srgb,var(--identity-primary) 24%,transparent),transparent 52%),linear-gradient(145deg,color-mix(in srgb,var(--identity-secondary) 76%,#111118),color-mix(in srgb,var(--identity-primary) 12%,#08080c))}
+ .identity-full .identity-card{width:100%;height:calc(100dvh - 54px);min-height:0;border-radius:13px;background:linear-gradient(165deg,color-mix(in srgb,var(--identity-primary) 15%,#050507),color-mix(in srgb,var(--identity-secondary) 42%,#030305) 62%);box-shadow:0 15px 45px #0007}
+ .identity-full .identity-banner{height:128px;border-radius:13px 13px 0 0}
+ .identity-full .identity-body{padding:56px 20px 28px}
+ .identity-full .identity-board,.identity-full-banner{display:none}
+}
