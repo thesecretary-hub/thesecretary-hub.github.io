@@ -16,7 +16,7 @@ async function setupUpdatesSubscription(){
   const status=document.querySelector('[data-updates-status]');
   if(!button)return;
   let subscribed=false;
-  const sync=()=>{button.textContent=accountUser?(subscribed?'Unsubscribe':'Subscribe Now'):'Subscribe Now';button.setAttribute('aria-pressed',String(subscribed));status.textContent=accountUser?(subscribed?`Email updates are enabled for ${accountUser.email}.`:`Email updates are disabled for ${accountUser.email}.`):'';};
+  const sync=()=>{button.textContent=accountUser?(subscribed?'Unsubscribe':'Subscribe Now'):'Subscribe Now';button.setAttribute('aria-pressed',String(subscribed));status.textContent='';};
   if(accountUser){
     button.disabled=true;status.textContent='Checking your subscription…';
     try{subscribed=Boolean((await statusApi('subscription_status')).subscribed);sync();}

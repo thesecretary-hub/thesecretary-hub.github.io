@@ -29,11 +29,12 @@ try {
   }
   if (!item) throw new Error('Page not found.');
   document.title = `${item.title} — The Secretary Hub`;
+  updatePageMetadata(item, type);
   if (type === 'post') {
     document.body.classList.add('post-reading-mode');
     const readerStyle = document.createElement('link');
     readerStyle.rel = 'stylesheet';
-    readerStyle.href = '/assets/post-reader.css?v=1.2.1';
+    readerStyle.href = '/assets/post-reader.css?v=1.3.0';
     document.head.append(readerStyle);
     root.innerHTML = `<main class="post-story-page"><article class="post-story"><img class="post-story-hero" src="${esc(item.full_thumb_url || '/assets/images/post-fallback-full.webp')}" alt=""><header class="post-story-header"><div class="post-story-tag">Posts <span>/</span> The Secretary</div><h1>${esc(item.title)}</h1>${item.excerpt ? `<p>${esc(item.excerpt)}</p>` : ''}<time>${formatDate(item.published_at, { dateStyle: 'long' })}</time></header><div class="post-story-body rich-content">${safeRichHtml(item.content_html || '')}</div></article></main>`;
     bindPostImageLightbox();
@@ -53,6 +54,25 @@ try {
     root.innerHTML = `<main class="status-detail-page ${type}-detail"><nav><a href="/status/">← Status</a></nav><article><header><h1>${esc(item.title)}</h1><p>${type === 'incident' ? 'Incident report for' : 'Maintenance report for'} ${esc(source)}</p></header><section class="status-detail-timeline">${rows.map(row => `<div class="status-detail-row"><h2>${esc(row.label)}</h2><div><p>${esc(row.message)}</p><time>Posted ${formatDate(row.time, {dateStyle:'medium',timeStyle:'short'})}</time></div></div>`).join('')}</section></article></main>`;
   }
 } catch (error) { root.innerHTML = `<main class="container page"><section class="not-found-panel"><span class="eyebrow">404</span><h1>Page unavailable</h1><p>${esc(error.message)}</p><a class="button primary" href="/">Return home</a></section></main>`; }
+
+
+function updatePageMetadata(item, contentType) {
+  const isPost = contentType === 'post';
+  const fallback = `Read this ${contentType} update from The Secretary.`;
+  const description = String(isPost ? (item.excerpt || 'Read the latest post from The Secretary Hub.') : (item.note || item.description || item.message || fallback)).replace(/\s+/g, ' ').trim().slice(0, 200);
+  const image = new URL(isPost ? (item.full_thumb_url || '/assets/images/post-fallback-full.webp') : '/assets/images/meta-status.png', location.origin).href;
+  const named = { description, 'theme-color': '#F4FEB0', 'twitter:card': 'summary_large_image', 'twitter:title': item.title, 'twitter:description': description, 'twitter:image': image };
+  Object.entries(named).forEach(([name, content]) => upsertMeta('name', name, content));
+  [['og:type', isPost ? 'article' : 'website'], ['og:title', item.title], ['og:description', description], ['og:url', location.href], ['og:image', image]].forEach(([property, content]) => upsertMeta('property', property, content));
+  let canonical = document.head.querySelector('link[rel="canonical"]');
+  if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.append(canonical); }
+  canonical.href = location.href.split('?')[0];
+}
+function upsertMeta(attribute, key, content) {
+  let node = document.head.querySelector(`meta[${attribute}="${key}"]`);
+  if (!node) { node = document.createElement('meta'); node.setAttribute(attribute, key); document.head.append(node); }
+  node.content = content;
+}
 
 function bindPostImageLightbox() {
   root.querySelectorAll('.post-story img').forEach(image => {

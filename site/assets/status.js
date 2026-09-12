@@ -121,7 +121,7 @@ function drawChart(data, range = 'day') {
   const hours = {day:24,week:24*7,month:24*30}[range] || 24;
   const newestAt = source.length ? new Date(source[source.length-1].checkedAt).getTime() : Date.now();
   const cutoff = newestAt - hours * 3600000;
-  const series = source.filter(item => new Date(item.checkedAt).getTime() >= cutoff);
+  const series = source.filter(item => new Date(item.checkedAt).getTime() >= cutoff && Number.isFinite(Number(item.responseMs)) && Number(item.responseMs) <= 1200);
   const latest = series[series.length - 1];
   root.querySelector('[data-chart-latest]').textContent = latest ? `${Math.round(latest.responseMs)} ms` : 'No data';
   if (!series.length) { svg.innerHTML = mobileHistory.matches ? '<text x="180" y="90" text-anchor="middle"><tspan x="180">Response samples will appear</tspan><tspan x="180" dy="18">after scheduled checks run.</tspan></text>' : '<text x="410" y="100" text-anchor="middle">Response samples will appear after scheduled checks run.</text>'; return; }

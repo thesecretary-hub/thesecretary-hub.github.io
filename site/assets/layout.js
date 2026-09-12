@@ -38,7 +38,7 @@ function footer() {
 }
 
 function ensureHubAssets() {
-  if (!document.querySelector('link[href*="hub.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="/assets/hub.css?v=2.2.2">');
+  if (!document.querySelector('link[href*="hub.css"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="/assets/hub.css?v=2.3.0">');
   ensureProfileStyles();
   if (!document.querySelector('link[href*="Bowlby+One+SC"]')) document.head.insertAdjacentHTML('beforeend', '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bowlby+One+SC:wght@400&amp;display=swap" rel="stylesheet">');
 }
@@ -121,6 +121,6 @@ export function showToast(message, type = 'success', timeout = 5000) {
 export async function openProfile(username, viewerProfile = null, anchor = null) {
   if (!supabase) return showToast('Community database is not connected.', 'error');
   await ensureProfileStyles();
-  const { showProfile } = await import('./profile-ui.js?v=2.8.0');
+  const { showProfile } = await import('./profile-ui.js?v=2.9.0');
   return showProfile(username, viewerProfile, anchor);
 }
