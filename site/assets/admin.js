@@ -1,4 +1,4 @@
-import { statusApi } from './api.js';
+import { statusApi } from './api.js?v=6.6.0';
 import { currentAccount, supabase } from './supabase-client.js';
 import { esc, formatDate, showToast } from './layout.js?v=4.5.0';
 import { renderPostAdmin } from './post-admin.js?v=1.1.0';
@@ -6,23 +6,28 @@ import { renderPostAdmin } from './post-admin.js?v=1.1.0';
 const page=document.body.dataset.admin||'overview';
 const root=document.querySelector('[data-admin-root]');
 let headerController;
-root.innerHTML='<main class="auth-body"><section class="auth-shell"><div class="auth-card"><h1>Opening control room…</h1><p>Verifying your administrator session.</p></div></section></main>';
+let adminProfile=null;
+const loader=()=>'<main class="site-page-loader admin-loader" aria-label="Loading control room"><span></span></main>';
+root.innerHTML=loader();
 
-const adminLinks=[['overview','Overview','/admin/'],['incidents','Incidents','/admin/incidents/'],['maintenance','Maintenance','/admin/maintenance/'],['posts','Post Studio','/admin/posts/'],['webhooks','Webhooks','/admin/webhooks/'],['servers','Servers','/admin/servers/']];
-function nav(){return `<header class="admin-header"><div class="container wide admin-header-inner"><a class="admin-brand" href="/admin/" aria-label="The Secretary control room"><span class="admin-brand-mark"><img src="/assets/images/favicon.png" alt=""></span><span><strong>The Secretary</strong><small>Control room</small></span></a><nav class="admin-primary-nav" aria-label="Control room">${adminLinks.map(([key,label,href])=>`<a class="${page===key?'active':''}" href="${href}">${label}</a>`).join('')}</nav><div class="admin-header-actions"><a class="admin-view-site" href="/">View site</a><button class="admin-menu-toggle" type="button" data-admin-menu aria-label="Open admin navigation" aria-expanded="false"><span></span><span></span></button><button class="admin-logout" data-admin-logout>Log out</button></div></div></header>`;}
+const adminLinks=[['overview','Overview','/admin/'],['incidents','Incidents','/admin/incidents/'],['maintenance','Maintenance','/admin/maintenance/'],['posts','Posts','/admin/posts/'],['webhooks','Webhooks','/admin/webhooks/'],['servers','Servers','/admin/servers/']];
+function nav(){return `<header class="hub-header admin-hub-header" data-admin-header><div class="hub-nav-shell"><a class="hub-logo" href="/" aria-label="The Secretary home"><img src="/assets/images/favicon.png" alt=""></a><nav class="hub-nav admin-hub-nav" aria-label="Control room navigation">${adminLinks.map(([key,label,href])=>`<a class="hub-nav-link ${page===key?'active':''}" href="${href}">${label}</a>`).join('')}</nav><div class="hub-actions"><span class="admin-context">Control room</span><button class="account-icon admin-account-icon" type="button" data-admin-account aria-label="Open account menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.25"/><path d="M5.8 20c.25-4 2.3-6 6.2-6s5.95 2 6.2 6"/></svg></button><button class="hub-menu" type="button" data-admin-menu aria-label="Open navigation" aria-expanded="false"><span></span><span></span></button></div></div><div class="admin-account-menu" data-admin-account-menu hidden><strong>${esc(adminProfile?.display_name||'Administrator')}</strong><small>@${esc(adminProfile?.username||'admin')}</small><a href="/profile/">View profile</a><a href="/">View website</a><button type="button" data-admin-logout>Log out</button></div></header>`;}
 
 function bindAdminHeader(){
- const header=document.querySelector('.admin-header'),menu=document.querySelector('[data-admin-menu]');
+ const header=document.querySelector('[data-admin-header]'),menu=document.querySelector('[data-admin-menu]'),account=document.querySelector('[data-admin-account]'),accountMenu=document.querySelector('[data-admin-account-menu]');
  if(!header)return;
  headerController?.abort();headerController=new AbortController();const {signal}=headerController;
  const paint=()=>header.classList.toggle('scrolled',scrollY>10);paint();
  addEventListener('scroll',paint,{passive:true,signal});
- menu?.addEventListener('click',()=>{const open=header.classList.toggle('menu-open');menu.setAttribute('aria-expanded',String(open));menu.setAttribute('aria-label',open?'Close admin navigation':'Open admin navigation');},{signal});
+ menu?.addEventListener('click',()=>{const open=header.classList.toggle('mobile-open');menu.setAttribute('aria-expanded',String(open));menu.setAttribute('aria-label',open?'Close navigation':'Open navigation');},{signal});
+ account?.addEventListener('click',()=>{const open=accountMenu.hidden;accountMenu.hidden=!open;account.setAttribute('aria-expanded',String(open));},{signal});
+ document.addEventListener('click',event=>{if(!accountMenu?.hidden&&!event.target.closest('[data-admin-account], [data-admin-account-menu]')){accountMenu.hidden=true;account?.setAttribute('aria-expanded','false');}},{signal});
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'){header.classList.remove('mobile-open');menu?.setAttribute('aria-expanded','false');if(accountMenu)accountMenu.hidden=true;account?.setAttribute('aria-expanded','false');}},{signal});
  document.querySelector('[data-admin-logout]')?.addEventListener('click',async()=>{await supabase.auth.signOut();location.href='/';},{signal});
 }
 
 async function bootstrap(){try{
-  const {user,profile}=await currentAccount();
+  const {user,profile}=await currentAccount();adminProfile=profile;
   if(!user){location.href=`/login/?return=${encodeURIComponent(location.pathname)}`;}
   else if(profile?.role!=='admin'){root.innerHTML='<main class="auth-body"><section class="auth-shell"><div class="auth-card"><h1>Owner access only</h1><p>This account is not authorized for infrastructure administration.</p><a class="button primary" href="/">Return home</a></div></section></main>';}
   else await load();
@@ -31,7 +36,7 @@ async function bootstrap(){try{
 }}
 
 async function load(){
-  root.innerHTML=`${nav()}<main class="site-page-loader" aria-live="polite"><span></span><p>Loading control room…</p></main>`;
+  root.innerHTML=`${nav()}${loader()}`;
   bindAdminHeader();
   if(page==='posts'){await renderPostAdmin(root,nav);bindAdminHeader();return;}
   try{const data=await statusApi('admin_status');render(data);bind(data);}catch(error){root.querySelector('main').innerHTML=`<div class="flash error"><strong>Admin backend unavailable.</strong> ${esc(error.message)}</div>`;}

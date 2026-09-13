@@ -21,6 +21,15 @@ export async function statusApi(action = 'status', data = {}) {
       body: new URLSearchParams(payload),
       redirect: 'follow',
     });
+    // Some Apps Script deployments reject the cross-origin POST redirect with
+    // a deployment-level 404 even though the same authenticated route is live.
+    // Code.gs accepts both verbs and performs the same token/role validation.
+    if (response.status === 404) {
+      const fallbackUrl = new URL(APP_CONFIG.appsScriptUrl);
+      Object.entries(payload).forEach(([key, value]) => fallbackUrl.searchParams.set(key, String(value ?? '')));
+      fallbackUrl.searchParams.set('_ts', String(Date.now()));
+      response = await fetch(fallbackUrl, { cache: 'no-store', redirect: 'follow' });
+    }
   }
   if (!response.ok) throw new Error(`Status backend returned HTTP ${response.status}.`);
   const result = await response.json();
