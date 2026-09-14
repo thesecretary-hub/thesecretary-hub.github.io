@@ -57,12 +57,13 @@ function bind(root, posts) {
       await requireRatio(form.elements.poster.files[0], 1, 'Thumbnail');
       const full = form.elements.full_thumb.files[0] ? await uploadPostMedia(form.elements.full_thumb.files[0], `${folder}/full`) : { path: existing?.full_thumb_path, url: existing?.full_thumb_url };
       const poster = form.elements.poster.files[0] ? await uploadPostMedia(form.elements.poster.files[0], `${folder}/poster`) : { path: existing?.poster_path, url: existing?.poster_url };
-      const gallery = [...(existing?.gallery || [])];
+      const currentHtml = editor.innerHTML.trim();
+      const gallery = [...(existing?.gallery || [])].filter((item) => (item.url && currentHtml.includes(item.url)) || (item.path && currentHtml.includes(item.path)));
       const added = [];
       for (const file of form.elements.gallery.files) { const uploaded = await uploadPostMedia(file, `${folder}/gallery`); gallery.push(uploaded); added.push(uploaded); }
       const now = new Date().toISOString();
       const galleryHtml = added.map((item) => `<figure><img src="${item.url}" alt=""><figcaption></figcaption></figure>`).join('');
-      const saved = await savePost({ id: existing?.id, slug: folder, title: form.elements.title.value.trim(), excerpt: form.elements.excerpt.value.trim(), content_html: editor.innerHTML.trim() + galleryHtml, full_thumb_url: full.url, full_thumb_path: full.path, poster_url: poster.url, poster_path: poster.path, gallery, status: submitStatus, is_hero: form.elements.is_hero.checked, is_pinned: form.elements.is_pinned.checked, published_at: submitStatus === 'published' ? existing?.published_at || now : existing?.published_at || null });
+      const saved = await savePost({ id: existing?.id, slug: folder, title: form.elements.title.value.trim(), excerpt: form.elements.excerpt.value.trim(), content_html: currentHtml + galleryHtml, full_thumb_url: full.url, full_thumb_path: full.path, poster_url: poster.url, poster_path: poster.path, gallery, status: submitStatus, is_hero: form.elements.is_hero.checked, is_pinned: form.elements.is_pinned.checked, published_at: submitStatus === 'published' ? existing?.published_at || now : existing?.published_at || null });
       const firstPublish = submitStatus === 'published' && existing?.status !== 'published';
       if (firstPublish) {
         const results = await Promise.allSettled(['discord', 'email'].map((channel) => notifyPost(saved, channel)));

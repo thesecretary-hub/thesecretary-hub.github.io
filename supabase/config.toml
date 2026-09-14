@@ -1,5 +1,4 @@
-[functions.login-identifier]
-verify_jwt = false
+project_id = "ubxgpkjuzkwlewofxmfy"
 
-[functions.forum-reply-notification]
-verify_jwt = true
+[functions.media-cleanup]
+verify_jwt = false

@@ -1,7 +1,7 @@
 import { APP_CONFIG } from './config.js';
 import { supabase } from './supabase-client.js';
 
-const publicActions = new Set(['status', 'archive', 'content', 'subscribe', 'unsubscribe']);
+const publicActions = new Set(['status', 'archive', 'content']);
 
 export async function statusApi(action = 'status', data = {}) {
   const payload = { action, ...data };

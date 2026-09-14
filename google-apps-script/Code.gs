@@ -11,7 +11,7 @@ const STATUS_CONFIG = {
     maintenance: ['id', 'slug', 'json', 'updatedAt'],
     posts: ['id', 'slug', 'json', 'updatedAt'],
     hostSwitches: ['id', 'slug', 'json', 'updatedAt'],
-    subscribers: ['email', 'token', 'active', 'createdAt'],
+    subscribers: ['userId', 'email', 'active', 'createdAt'],
   },
 };
 
@@ -93,17 +93,15 @@ function route_(action, data, isPost) {
     initializeSheets_();
     let accountUser = null;
     if (['subscription_status', 'toggle_account_subscription'].indexOf(action) >= 0) accountUser = requireUser_(data.access_token);
-    else if (['status', 'archive', 'content', 'subscribe', 'unsubscribe'].indexOf(action) === -1) requireAdmin_(data.access_token);
+    else if (['status', 'archive', 'content'].indexOf(action) === -1) requireAdmin_(data.access_token);
     let result;
     switch (action) {
       case 'status': result = statusPayload_(false); break;
       case 'admin_status': result = statusPayload_(true); break;
       case 'archive': result = archivePayload_(data.type); break;
       case 'content': result = contentPayload_(data.type, data.slug); break;
-      case 'subscribe': result = subscribe_(data.email); break;
-      case 'unsubscribe': result = unsubscribe_(data.token); break;
-      case 'subscription_status': result = subscriptionStatus_(accountUser.email); break;
-      case 'toggle_account_subscription': result = toggleAccountSubscription_(accountUser.email); break;
+      case 'subscription_status': result = subscriptionStatus_(accountUser); break;
+      case 'toggle_account_subscription': result = toggleAccountSubscription_(accountUser); break;
       case 'check_now':
         result = runScheduledChecks();
         if (result && result.skipped) throw new Error('A monitoring run is already in progress. Wait a moment and try again.');
@@ -490,10 +488,8 @@ function updateWebhooks_(data) { const settings=getSettings_();['http','discord'
 function archivePayload_(type) { const map={incidents:'incidents',maintenance:'maintenance',posts:'posts'};if(!map[type])throw new Error('Unknown archive.');return{type:type,items:sortRecords_(readRecords_(map[type]),type==='posts'?'publishedAt':type==='maintenance'?'startAt':'startedAt')}; }
 function contentPayload_(type,slug) { const map={incident:'incidents',maintenance:'maintenance',post:'posts'};if(!map[type])throw new Error('Unknown page type.');const item=findRecordBySlug_(map[type],slug);if(!item)throw new Error('Page not found.');return{type:type,item:item}; }
 
-function subscribe_(email) { email=String(email||'').trim().toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))throw new Error('Valid email required.');const sheet=getSheet_('subscribers');const rows=sheet.getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][0]).toLowerCase()===email){sheet.getRange(i+1,3).setValue(true);return{};}}const token=Utilities.getUuid().replace(/-/g,'');sheet.appendRow([email,token,true,new Date().toISOString()]);MailApp.sendEmail({to:email,subject:'Subscribed to The Secretary status',body:'You will now receive operational alerts and system posts from The Secretary.',htmlBody:'<p>You will now receive operational alerts and system posts from The Secretary.</p><p><a href="'+STATUS_CONFIG.SITE_URL+'/unsubscribe/?token='+token+'">Unsubscribe</a></p>'});return{}; }
-function unsubscribe_(token) { const sheet=getSheet_('subscribers');const rows=sheet.getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][1])===String(token)){sheet.getRange(i+1,3).setValue(false);return{};}}throw new Error('Subscription not found.'); }
-function subscriptionStatus_(email) { email=String(email||'').trim().toLowerCase();const rows=getSheet_('subscribers').getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][0]).toLowerCase()===email)return{subscribed:rows[i][2]===true||String(rows[i][2]).toLowerCase()==='true'};}return{subscribed:false}; }
-function toggleAccountSubscription_(email) { email=String(email||'').trim().toLowerCase();const sheet=getSheet_('subscribers');const rows=sheet.getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][0]).toLowerCase()===email){const active=rows[i][2]===true||String(rows[i][2]).toLowerCase()==='true';sheet.getRange(i+1,3).setValue(!active);return{subscribed:!active};}}subscribe_(email);return{subscribed:true}; }
+function subscriptionStatus_(user) { const userId=String(user.id||'');const rows=getSheet_('subscribers').getDataRange().getValues();for(let i=1;i<rows.length;i++){if(String(rows[i][0])===userId)return{subscribed:rows[i][2]===true||String(rows[i][2]).toLowerCase()==='true'};}return{subscribed:false}; }
+function toggleAccountSubscription_(user) { const userId=String(user.id||'');const email=String(user.email||'').trim().toLowerCase();if(!userId||!email)throw new Error('A verified account is required.');const sheet=getSheet_('subscribers');const rows=sheet.getDataRange().getValues();let row=0,active=false;for(let i=1;i<rows.length;i++){if(String(rows[i][0])===userId){row=i+1;active=rows[i][2]===true||String(rows[i][2]).toLowerCase()==='true';break;}}if(row)sheet.getRange(row,1,1,4).setValues([[userId,email,!active,rows[row-1][3]||new Date().toISOString()]]);else sheet.appendRow([userId,email,true,new Date().toISOString()]);return{subscribed:!active}; }
 function sendOtp_(code) { code=String(code||'').trim();if(!/^\d{6}$/.test(code))throw new Error('Invalid sign-in code.');MailApp.sendEmail({to:STATUS_CONFIG.ADMIN_EMAIL,subject:'The Secretary Status sign-in code',body:'Your sign-in code is '+code+'. It expires in 10 minutes.',htmlBody:'<div style="font-family:Arial,sans-serif;background:#080808;color:#fff;padding:28px"><p style="color:#f2eb00;font-weight:bold">THE SECRETARY STATUS</p><h2>Your sign-in code</h2><p style="font-size:34px;letter-spacing:8px;font-weight:bold">'+code+'</p><p>This code expires in 10 minutes. If you did not request it, ignore this message.</p></div>'});return{}; }
 
 function notifyEvent_(event, item, settings, channels) {
@@ -573,7 +569,8 @@ function sendWebhook_(url, content, options) {
 
 function notifySubscribers_(subject, message, pageUrl) {
   const subscribers = activeSubscribers_();
-  const requiredQuota = subscribers.length + 1;
+  const adminIsSubscriber = subscribers.some(function (subscriber) { return subscriber.email.toLowerCase() === STATUS_CONFIG.ADMIN_EMAIL.toLowerCase(); });
+  const requiredQuota = subscribers.length + (adminIsSubscriber ? 0 : 1);
   const remainingQuota = MailApp.getRemainingDailyQuota();
   if (remainingQuota < requiredQuota) {
     throw new Error('Email delivery stopped: ' + requiredQuota + ' recipients are required but only ' + remainingQuota + ' daily sends remain.');
@@ -588,17 +585,19 @@ function notifySubscribers_(subject, message, pageUrl) {
         to: subscriber.email,
         subject: subject,
         body: plain,
-        htmlBody: html + '<p><a href="' + STATUS_CONFIG.SITE_URL + '/unsubscribe/?token=' + subscriber.token + '">Unsubscribe</a></p>'
+        htmlBody: html + '<p><a href="' + STATUS_CONFIG.SITE_URL + '/">Manage email updates in your account</a></p>'
       });
       sent += 1;
     });
-    MailApp.sendEmail({
-      to: STATUS_CONFIG.ADMIN_EMAIL,
-      subject: subject,
-      body: plain,
-      htmlBody: html
-    });
-    sent += 1;
+    if (!adminIsSubscriber) {
+      MailApp.sendEmail({
+        to: STATUS_CONFIG.ADMIN_EMAIL,
+        subject: subject,
+        body: plain,
+        htmlBody: html
+      });
+      sent += 1;
+    }
   } catch (error) {
     console.error('Email delivery failed after ' + sent + ' successful recipient(s): ' + (error && error.stack ? error.stack : error));
     throw new Error('Email delivery failed after ' + sent + ' successful recipient(s): ' + (error.message || String(error)));
@@ -1466,7 +1465,8 @@ function writeHostSwitchLog_(state, status, message) {
   writeRecord_('hostSwitches', item);
 }
 
-function initializeSheets_() { const db=getDb_();Object.keys(STATUS_CONFIG.SHEETS).forEach(function(name){let sheet=db.getSheetByName(name);if(!sheet)sheet=db.insertSheet(name);if(sheet.getLastRow()===0)sheet.appendRow(STATUS_CONFIG.SHEETS[name]);});const first=db.getSheets()[0];if(first&&first.getName()==='Sheet1'&&first.getLastRow()===0&&Object.keys(STATUS_CONFIG.SHEETS).length>0)db.deleteSheet(first);if(!Object.keys(readSettings_()).length)saveSettings_(DEFAULT_SETTINGS); }
+function initializeSheets_() { const db=getDb_();Object.keys(STATUS_CONFIG.SHEETS).forEach(function(name){let sheet=db.getSheetByName(name);if(!sheet)sheet=db.insertSheet(name);if(sheet.getLastRow()===0)sheet.appendRow(STATUS_CONFIG.SHEETS[name]);if(name==='subscribers')migrateSubscriberSheet_(sheet);});const first=db.getSheets()[0];if(first&&first.getName()==='Sheet1'&&first.getLastRow()===0&&Object.keys(STATUS_CONFIG.SHEETS).length>0)db.deleteSheet(first);if(!Object.keys(readSettings_()).length)saveSettings_(DEFAULT_SETTINGS); }
+function migrateSubscriberSheet_(sheet) { const expected=STATUS_CONFIG.SHEETS.subscribers;const current=sheet.getRange(1,1,1,expected.length).getValues()[0].map(String);if(current.join('|')===expected.join('|'))return;sheet.clearContents();sheet.getRange(1,1,1,expected.length).setValues([expected]); }
 function getDb_() { const id=PropertiesService.getScriptProperties().getProperty('STATUS_SPREADSHEET_ID');if(!id)throw new Error('Run setupStatusBackend once before deployment.');return SpreadsheetApp.openById(id); }
 function getSheet_(name) { const sheet=getDb_().getSheetByName(name);if(!sheet)throw new Error('Missing data sheet: '+name);return sheet; }
 function readSettings_() { const rows=getSheet_('settings').getDataRange().getValues();const out={};for(let i=1;i<rows.length;i++)if(rows[i][0])out[String(rows[i][0])]=String(rows[i][1]);return out; }
@@ -1485,7 +1485,7 @@ function deleteRecord_(name,id) { const sheet=getSheet_(name);const rows=sheet.g
 function findRecordById_(name,id) { return readRecords_(name).find(function(x){return String(x.id)===String(id);})||null; }
 function findRecordBySlug_(name,slug) { return readRecords_(name).find(function(x){return String(x.slug)===String(slug);})||null; }
 function sortRecords_(items,key) { return items.sort(function(a,b){return new Date(b[key]||b.updatedAt||0)-new Date(a[key]||a.updatedAt||0);}); }
-function activeSubscribers_() { const rows=getSheet_('subscribers').getDataRange().getValues();return rows.slice(1).filter(function(r){return r[2]===true||String(r[2]).toLowerCase()==='true';}).map(function(r){return{email:String(r[0]),token:String(r[1])};}); }
+function activeSubscribers_() { const unique={};getSheet_('subscribers').getDataRange().getValues().slice(1).forEach(function(r){const userId=String(r[0]||'').trim();const email=String(r[1]||'').trim().toLowerCase();const active=r[2]===true||String(r[2]).toLowerCase()==='true';if(userId&&email&&active)unique[email]={userId:userId,email:email};});return Object.keys(unique).map(function(email){return unique[email];}); }
 
 function uniqueSlug_(sheet,value) { const base=normalizeSlug_(value)||'update';let slug=base;let n=2;while(findRecordBySlug_(sheet,slug)){slug=base+'-'+n++;}return slug; }
 function randomPublicSlug_(sheet) { let slug='';do{slug=Utilities.getUuid().replace(/-/g,'').slice(0,12);}while(findRecordBySlug_(sheet,slug));return slug; }

@@ -25,18 +25,8 @@ async function setupUpdatesSubscription(){
     button.addEventListener('click',async()=>{button.disabled=true;try{subscribed=Boolean((await statusApi('toggle_account_subscription')).subscribed);sync();showToast(subscribed?'Email updates enabled.':'Email updates disabled.',subscribed?'success':'info');}catch(error){showToast(error.message,'error');}finally{button.disabled=false;}});
     return;
   }
-  button.addEventListener('click',()=>openEmailSubscriptionDialog());
+  button.addEventListener('click',()=>{location.href=`/register/?return=${encodeURIComponent(location.pathname+location.search)}`;});
 }
-
-function openEmailSubscriptionDialog(){
-  if(document.querySelector('[data-updates-dialog]'))return;
-  const dialog=document.createElement('dialog');dialog.className='updates-dialog';dialog.dataset.updatesDialog='';
-  dialog.innerHTML=`<form method="dialog" class="updates-dialog-form"><button class="updates-dialog-close" type="button" aria-label="Close">×</button><span>THE SECRETARY UPDATES</span><h2>Stay in the loop.</h2><p>Enter your email to receive new posts, announcements, and important service updates.</p><label>Email address<input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label><button class="updates-dialog-submit" type="submit">Subscribe</button><small data-dialog-status role="status"></small></form>`;
-  document.body.append(dialog);dialog.showModal();dialog.querySelector('input').focus();
-  const close=()=>dialog.close();dialog.querySelector('.updates-dialog-close').onclick=close;dialog.onclick=event=>{if(event.target===dialog)close();};dialog.onclose=()=>dialog.remove();
-  dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget,submit=form.querySelector('[type=submit]'),message=form.querySelector('[data-dialog-status]');submit.disabled=true;message.textContent='Subscribing…';try{await statusApi('subscribe',{email:new FormData(form).get('email')});message.textContent='Subscribed. Check your inbox for confirmation.';submit.textContent='Done';setTimeout(close,1100);}catch(error){message.textContent=error.message;submit.disabled=false;}};
-}
-
 setupUpdatesSubscription();
 
 function renderDrawer(posts) {

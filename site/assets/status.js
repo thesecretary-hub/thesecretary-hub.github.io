@@ -165,7 +165,7 @@ function render(data, accountUser) {
   const overall = availabilityServices.some((item) => stateClass(item.state) === 'outage') ? 'outage' : availabilityServices.some((item) => stateClass(item.state) === 'degraded') ? 'degraded' : 'operational';
   (data.incidents||[]).forEach(item=>sessionStorage.setItem(`status-record:incident:${item.slug}`,JSON.stringify(item)));
   (data.maintenance||[]).forEach(item=>sessionStorage.setItem(`status-record:maintenance:${item.slug}`,JSON.stringify(item)));
-  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past ${historyDays()} days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor, data.historyEvents||[])).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><div class="status-tooltip" data-status-tooltip></div><dialog class="status-subscribe-dialog" data-status-subscribe-dialog><form data-status-subscribe-form><button class="status-dialog-close" type="button" data-subscribe-close aria-label="Close">×</button><h2>Subscribe to updates</h2><p>Receive incident and maintenance updates by email.</p><input type="email" name="email" required placeholder="you@example.com"><button type="submit">Subscribe</button><small data-subscribe-message></small></form></dialog>`;
+  root.innerHTML = `<main class="status-public-page"><div class="status-wrap"><div class="status-top"><button type="button" data-subscribe-open>Subscribe to updates</button></div><div class="overall-status ${overall}">${overall === 'operational' ? 'All Systems Operational' : overall === 'degraded' ? 'Some Systems Degraded' : 'Service Disruption'}</div><p class="uptime-caption">Uptime over the past ${historyDays()} days.</p><section class="service-list">${services.map((service) => serviceRow(service, monitor, data.historyEvents||[])).join('')}</section>${chartMarkup()}<section class="past-incidents"><h2>Past incidents &amp; maintenance</h2>${incidentDays(data.incidents, data.maintenance)}</section></div></main><div class="status-tooltip" data-status-tooltip></div>`;
   root.querySelectorAll('[data-chart-range]').forEach((button) => button.addEventListener('click', () => { root.querySelectorAll('[data-chart-range]').forEach((item) => item.classList.toggle('active', item === button)); drawChart(data, button.dataset.chartRange); }));
   refreshHistory = () => {
     root.querySelector('.uptime-caption').textContent = `Uptime over the past ${historyDays()} days.`;
@@ -186,26 +186,14 @@ function render(data, accountUser) {
     tooltip.style.top = `${barRect.bottom + 14}px`;
   });
   root.querySelector('.service-list').addEventListener('pointerleave', () => tooltip.classList.remove('visible'));
-  const dialog = root.querySelector('[data-status-subscribe-dialog]');
   const subscribeButton = root.querySelector('[data-subscribe-open]');
-  root.querySelector('[data-subscribe-close]').onclick = () => dialog.close();
-  root.querySelector('[data-status-subscribe-form]').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const message = form.querySelector('[data-subscribe-message]');
-    const button = form.querySelector('[type="submit"]');
-    button.disabled = true;
-    try { await statusApi('subscribe', {email:new FormData(form).get('email')}); message.textContent = 'Subscription confirmed.'; form.reset(); }
-    catch (error) { message.textContent = error.message; }
-    finally { button.disabled = false; }
-  });
   if(accountUser){
     let subscribed=false;
     const sync=()=>{subscribeButton.textContent=subscribed?'Unsubscribe from updates':'Subscribe to updates';subscribeButton.setAttribute('aria-pressed',String(subscribed));};
     subscribeButton.disabled=true;subscribeButton.textContent='Checking subscription…';
     statusApi('subscription_status').then(result=>{subscribed=Boolean(result.subscribed);sync();}).catch(error=>{subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Subscription unavailable';subscribeButton.title=error.message;}).finally(()=>{subscribeButton.disabled=false;});
     subscribeButton.onclick=async()=>{subscribeButton.disabled=true;try{subscribed=Boolean((await statusApi('toggle_account_subscription')).subscribed);sync();}catch(error){subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Try subscription again';subscribeButton.title=error.message;}finally{subscribeButton.disabled=false;}};
-  }else subscribeButton.onclick = () => dialog.showModal();
+  }else subscribeButton.onclick = () => { location.href=`/register/?return=${encodeURIComponent(location.pathname+location.search)}`; };
   drawChart(data);
 }
 

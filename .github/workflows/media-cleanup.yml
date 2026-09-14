@@ -1,0 +1,22 @@
+name: Clean replaced media
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete media unused for two hours
+        env:
+          FUNCTION_URL: ${{ secrets.SUPABASE_MEDIA_CLEANUP_URL }}
+          CLEANUP_SECRET: ${{ secrets.MEDIA_CLEANUP_SECRET }}
+        run: |
+          test -n "$FUNCTION_URL" && test -n "$CLEANUP_SECRET"
+          curl --fail-with-body --silent --show-error --request POST "$FUNCTION_URL" \
+            --header "x-cleanup-secret: $CLEANUP_SECRET"
