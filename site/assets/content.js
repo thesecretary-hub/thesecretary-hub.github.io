@@ -28,7 +28,7 @@ try {
     if(!item)item=(await statusApi('content', { type, slug })).item;
   }
   if (!item) throw new Error('Page not found.');
-  document.title = `${item.title} — The Secretary Hub`;
+  document.title = `${item.title} I The Secretary Hub`;
   updatePageMetadata(item, type);
   if (type === 'post') {
     document.body.classList.add('post-reading-mode');

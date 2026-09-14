@@ -29,7 +29,7 @@ async function load(){
       if(error) throw error;
       myVote=data?.vote||0;
     }
-    document.title=`${topic.title} — The Secretary Forums`;
+    document.title=`${topic.title} I The Secretary Forums`;
     draw();
     await loadReplies();
     if(/^#reply-\d+$/.test(location.hash)) await revealReply(location.hash.slice(7));
