@@ -1,5 +1,5 @@
 /* Mobile layouts: content reflows instead of relying on horizontal clipping. */
-@media (max-width: 960px) {
+@media (max-width: 1024px) {
   body :is(main,section,article,aside,form,fieldset,nav,header,footer,div,label) { min-width: 0; }
   body :is(h1,h2,h3,h4,p,a,strong,small,span,td,th) { overflow-wrap: anywhere; }
   body :is(input,textarea,select) { min-width: 0; max-width: 100%; font-size: 16px; }
@@ -26,7 +26,7 @@
   body .section-title { gap: 16px; flex-wrap: wrap; }
 }
 /* Ordinary vertical sections replace both pinned video experiences on touch-sized screens. */
-@media (max-width: 960px), (prefers-reduced-motion: reduce) {
+@media (max-width: 1024px), (prefers-reduced-motion: reduce) {
   body .showcase-sticky { position: relative !important; height: auto; min-height: 0; aspect-ratio: 16/9; }
   body .showcase-media video, body .showcase-toggle { display: none; }
   body .showcase-fallback { animation: none; }
@@ -83,13 +83,13 @@
   body .archive-row time { white-space: normal; }
   body .post-story-body > img { max-width: none; }
 }
-@media (min-width: 641px) and (max-width: 960px) {
+@media (min-width: 641px) and (max-width: 1024px) {
   body .hub-hero { overflow: hidden; }
   body .hero-copy { right: 24px; max-width: none; grid-template-columns: 110px minmax(0,1fr); }
   body .hero-poster-logo { width: 110px; height: 110px; }
 }
 /* Center the mobile homepage and shared menus, keeping desktop composition intact. */
-@media (max-width: 960px) {
+@media (max-width: 1024px) {
   body .hub-header { background: transparent; backdrop-filter: none; }
   body .hub-header.scrolled { background: rgba(0,0,0,.78); backdrop-filter: blur(18px); }
   body .hub-header.mobile-open { background: rgba(0,0,0,.78); backdrop-filter: blur(18px); }
