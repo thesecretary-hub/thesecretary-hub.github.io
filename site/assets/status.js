@@ -189,10 +189,26 @@ function render(data, accountUser) {
   const subscribeButton = root.querySelector('[data-subscribe-open]');
   if(accountUser){
     let subscribed=false;
-    const sync=()=>{subscribeButton.textContent=subscribed?'Unsubscribe from updates':'Subscribe to updates';subscribeButton.setAttribute('aria-pressed',String(subscribed));};
-    subscribeButton.disabled=true;subscribeButton.textContent='Checking subscription…';
-    statusApi('subscription_status').then(result=>{subscribed=Boolean(result.subscribed);sync();}).catch(error=>{subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Subscription unavailable';subscribeButton.title=error.message;}).finally(()=>{subscribeButton.disabled=false;});
-    subscribeButton.onclick=async()=>{subscribeButton.disabled=true;try{subscribed=Boolean((await statusApi('toggle_account_subscription')).subscribed);sync();}catch(error){subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Try subscription again';subscribeButton.title=error.message;}finally{subscribeButton.disabled=false;}};
+    const sync=()=>{
+      subscribeButton.textContent=subscribed?'Updates enabled ✓':'Subscribe to updates';
+      subscribeButton.setAttribute('aria-pressed',String(subscribed));
+      subscribeButton.classList.toggle('is-subscribed',subscribed);
+      subscribeButton.title=subscribed?'Click to unsubscribe from email updates.':'Subscribe your account email to updates.';
+    };
+    subscribeButton.disabled=true;subscribeButton.classList.add('is-working');subscribeButton.setAttribute('aria-busy','true');subscribeButton.textContent='Checking subscription…';
+    statusApi('subscription_status').then(result=>{subscribed=Boolean(result.subscribed);sync();}).catch(error=>{subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Subscription unavailable';subscribeButton.title=error.message;subscribeButton.classList.add('is-error');}).finally(()=>{subscribeButton.disabled=false;subscribeButton.classList.remove('is-working');subscribeButton.removeAttribute('aria-busy');});
+    subscribeButton.onclick=async()=>{
+      if(subscribeButton.disabled)return;
+      const enabling=!subscribed;
+      subscribeButton.disabled=true;subscribeButton.classList.remove('is-error','is-confirmed');subscribeButton.classList.add('is-working');subscribeButton.setAttribute('aria-busy','true');subscribeButton.textContent=enabling?'Enabling updates…':'Disabling updates…';
+      try{
+        subscribed=Boolean((await statusApi('toggle_account_subscription')).subscribed);
+        subscribeButton.classList.remove('is-working');subscribeButton.classList.add('is-confirmed');subscribeButton.textContent=subscribed?'Updates enabled ✓':'Updates disabled ✓';subscribeButton.setAttribute('aria-pressed',String(subscribed));
+        await new Promise(resolve=>setTimeout(resolve,900));
+        subscribeButton.classList.remove('is-confirmed');sync();
+      }catch(error){subscribeButton.classList.remove('is-working');subscribeButton.classList.add('is-error');subscribeButton.textContent=/unknown action/i.test(error.message)?'Email backend update required':'Could not update — try again';subscribeButton.title=error.message;}
+      finally{subscribeButton.disabled=false;subscribeButton.removeAttribute('aria-busy');}
+    };
   }else subscribeButton.onclick = () => { location.href=`/register/?return=${encodeURIComponent(location.pathname+location.search)}`; };
   drawChart(data);
 }
