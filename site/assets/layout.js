@@ -102,7 +102,7 @@ function bindLayout(profile) {
   shell.classList.toggle('scrolled', scrollY > 10);
   const setDrawer = (open) => { drawerOpen = open; shell.classList.toggle('drawer-open', open); toggle.setAttribute('aria-expanded', String(open)); drawer.setAttribute('aria-hidden', String(!open)); };
   toggle.addEventListener('click', () => {
-    if (matchMedia('(max-width: 960px)').matches) { location.href = '/posts/'; return; }
+    if (matchMedia('(max-width: 1024px)').matches) { location.href = '/posts/'; return; }
     setDrawer(!drawerOpen);
   });
   document.querySelector('[data-hub-menu]')?.addEventListener('click', (event) => { const open = shell.classList.toggle('mobile-open'); event.currentTarget.setAttribute('aria-expanded', String(open)); });

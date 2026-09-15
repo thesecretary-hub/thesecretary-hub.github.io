@@ -1,4 +1,4 @@
-import { mountLayout, showToast } from './layout.js?v=4.5.0';
+import { mountLayout, showToast } from './layout.js?v=4.5.1';
 import { FALLBACK_POST, getPublishedPosts, postDate, postHref } from './post-store.js';
 import { currentAccount } from './supabase-client.js';
 import { statusApi } from './api.js';
