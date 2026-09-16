@@ -10,9 +10,10 @@ mobileHistory.addEventListener('change', () => refreshHistory());
 const root = document.querySelector('[data-status-root]');
 document.body.classList.add('status-public-mode');
 
-const stateClass = (state) => state === 'operational' ? 'operational' : state === 'maintenance' || state === 'degraded' ? 'degraded' : state === 'unknown' ? 'unknown' : 'outage';
-const stateLabel = (state) => state === 'operational' ? 'Operational' : state === 'maintenance' || state === 'degraded' ? 'Degraded' : state === 'unknown' ? 'Awaiting data' : 'Disruption';
+const stateClass = (state) => state === 'operational' ? 'operational' : state === 'maintenance' ? 'maintenance' : state === 'major-short' ? 'major-short' : state === 'degraded' ? 'degraded' : state === 'unknown' ? 'unknown' : 'outage';
+const stateLabel = (state) => state === 'operational' ? 'Operational' : state === 'maintenance' ? 'Maintenance' : state === 'degraded' ? 'Degraded' : state === 'unknown' ? 'Awaiting data' : 'Disruption';
 const STATUS_TIME_ZONE = 'Asia/Kolkata';
+const MAJOR_OUTAGE_RED_AFTER_MS = 4 * 60 * 60 * 1000;
 const dayKey = (value) => {
   const parts = new Intl.DateTimeFormat('en-US', {timeZone:STATUS_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));
   const part = (type) => parts.find((item) => item.type === type)?.value;
@@ -41,19 +42,30 @@ function eventsForServiceDay(kind, date, events = []) {
   });
 }
 
+const eventStartTime = (event) => new Date(event.startedAt || event.startAt || event.updatedAt).getTime();
+const eventEndTime = (event) => {
+  const explicitEnd = event.recordType === 'maintenance' ? event.endAt : event.resolvedAt;
+  const value = explicitEnd ? new Date(explicitEnd).getTime() : Date.now();
+  return Number.isFinite(value) ? value : eventStartTime(event);
+};
+const eventDurationMs = (event) => Math.max(0, eventEndTime(event) - eventStartTime(event));
+const isMajorIncident = (event) => event.recordType === 'incident' && (event.impact === 'critical' || event.impact === 'major');
+const historyStateForEvents = (events) => {
+  const major = events.filter(isMajorIncident).sort((a, b) => eventDurationMs(b) - eventDurationMs(a))[0];
+  if (major) return eventDurationMs(major) > MAJOR_OUTAGE_RED_AFTER_MS ? 'outage' : 'major-short';
+  if (events.some((event) => event.recordType === 'incident')) return 'degraded';
+  if (events.some((event) => event.recordType === 'maintenance')) return 'maintenance';
+  return 'operational';
+};
+
 function serviceHistory(service, monitor, events = []) {
   return Array.from({length: historyDays()}, (_, index) => {
     const date = statusDateAtOffset(historyDays() - 1 - index);
     let state = 'operational';
     let uptimeValue = 100;
-    if(service.kind !== 'server'){
-      const dailyEvents=eventsForServiceDay(service.kind,date,events);
-      const incident=dailyEvents.find(event=>event.recordType==='incident'&&(service.kind==='discord'?event.source==='discord':event.source!=='discord'));
-      const maintenance=dailyEvents.find(event=>event.recordType==='maintenance');
-      if(incident){state=incident.impact==='critical'||incident.impact==='major'?'outage':'degraded';uptimeValue=null;}
-      else if(maintenance){state='degraded';uptimeValue=null;}
-    }
-    if (index === historyDays() - 1 && service.state !== 'operational') state = service.state;
+    const dailyEvents = service.kind === 'server' ? [] : eventsForServiceDay(service.kind, date, events);
+    if (dailyEvents.length) { state = historyStateForEvents(dailyEvents); uptimeValue = null; }
+    if (index === historyDays() - 1 && service.state !== 'operational' && !dailyEvents.length) state = service.state;
     const value = uptimeValue === null || uptimeValue === undefined ? stateLabel(state) : `${Number(uptimeValue).toFixed(3)}%`;
     return `<i class="${stateClass(state)}" data-history-kind="${service.kind}" data-history-day="${dayKey(date)}" data-history-date="${esc(formatDate(date, {dateStyle:'long'}))}" data-history-value="${esc(value)}"></i>`;
   }).join('');
@@ -94,12 +106,18 @@ function durationText(startValue, endValue) {
 
 function historyTooltip(bar, data) {
   const source = data.historyEvents || [...(data.incidents || []).map(item=>({...item,recordType:'incident'})),...(data.maintenance || []).map(item=>({...item,recordType:'maintenance'}))];
-  const relevant=eventsForServiceDay(bar.dataset.historyKind,new Date(`${bar.dataset.historyDay}T00:00:00Z`),source);
-  const incidents = relevant.filter(item => item.recordType === 'incident').map(item => ({label:item.impact === 'critical' || item.impact === 'major' ? 'Major outage' : 'Partial outage', duration:durationText(item.startedAt, item.resolvedAt)}));
-  const maintenance = relevant.filter(item => item.recordType === 'maintenance').map(item => ({label:'Maintenance', duration:durationText(item.startAt, item.status === 'completed' ? item.endAt : null)}));
-  const events = [...incidents, ...maintenance];
-  if (!events.length) return `<span>${esc(bar.dataset.historyDate)}</span><strong>${esc(bar.dataset.historyValue)}</strong>`;
-  return `<span>${esc(bar.dataset.historyDate)}</span><div class="history-tooltip-events">${events.map(event => `<p><b>${event.label === 'Major outage' ? '×' : event.label === 'Maintenance' ? '●' : '▲'}</b><strong>${esc(event.label)}</strong><em>${esc(event.duration)}</em></p>`).join('')}</div><small>Related</small><div class="history-tooltip-related">The Secretary was not responding</div>`;
+  const relevant=eventsForServiceDay(bar.dataset.historyKind,new Date(`${bar.dataset.historyDay}T00:00:00Z`),source).sort((a,b)=>eventStartTime(a)-eventStartTime(b));
+  const events = relevant.map((item) => {
+    if (item.recordType === 'maintenance') return {label:'Maintenance', duration:durationText(item.startAt, item.status === 'completed' ? item.endAt : null), tone:'maintenance'};
+    const major = isMajorIncident(item);
+    return {label:major ? 'Major outage' : 'Partial outage', duration:durationText(item.startedAt, item.resolvedAt), tone:major ? (eventDurationMs(item) > MAJOR_OUTAGE_RED_AFTER_MS ? 'major-long' : 'major-short') : 'partial'};
+  });
+  if (!events.length) {
+    const cleanDay = /^100(?:\.0+)?%$/.test(bar.dataset.historyValue);
+    return `<span>${esc(bar.dataset.historyDate)}</span><strong>${cleanDay ? 'No downtime recorded on this day.' : esc(bar.dataset.historyValue)}</strong>`;
+  }
+  const relatedTitle = relevant[0]?.title || (relevant[0]?.recordType === 'maintenance' ? 'Scheduled maintenance' : 'Service incident');
+  return `<span>${esc(bar.dataset.historyDate)}</span><div class="history-tooltip-events">${events.map(event => `<p class="${event.tone}"><b>${event.label === 'Major outage' ? '×' : event.label === 'Maintenance' ? '●' : '▲'}</b><strong>${esc(event.label)}</strong><em>${esc(event.duration)}</em></p>`).join('')}</div><small>Related</small><div class="history-tooltip-related">${esc(relatedTitle)}</div>`;
 }
 
 function smoothChartPath(series,x,y) {
